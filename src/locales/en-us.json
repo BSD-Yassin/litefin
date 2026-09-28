@@ -400,7 +400,6 @@
     "Videos": "Videos",
     "Writer": "Writer",
     "Writers": "Writers",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minutes",
     "1Minute": "1 Minute",
@@ -1698,5 +1697,7 @@
     "WatchProvidersRegionDescription": "Choose the country used to show streaming services on movie and series details.",
     "WatchProvidersCountriesError": "Unable to load countries. Please try again.",
     "ShowWatchProviders": "Show streaming services",
-    "ShowWatchProvidersDescription": "Show where to watch movies and series on Seerr and Jellyfin details pages. Disabled by default."
+    "ShowWatchProvidersDescription": "Show where to watch movies and series on Seerr and Jellyfin details pages. Disabled by default.",
+    "LabelAlphaPickerScrollMode": "Alphabet Quick-Jump Action",
+    "AlphaPickerScrollModeDescription": "In unlimited mode, scroll directly to letter sections instead of filtering the library."
 }

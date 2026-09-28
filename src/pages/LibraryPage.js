@@ -109,6 +109,10 @@ class LibraryPage extends Page {
         this._onPageChange = this._handlePageChange.bind(this);
         this._onGridClick = this._handleGridClick.bind(this);
 
+        // Alphabet quick-jump sequence token and offset cache (Unlimited Scroll Mode)
+        this._scrollLetterSeq = 0;
+        this._letterOffsetCache = new Map();
+
         // Mark as async page for Navigation State
         // (Page.init won't restore scroll/focus until we call restoreScrollFocusWhenReady)
         this._isAsyncPage = true;
@@ -299,6 +303,11 @@ class LibraryPage extends Page {
 
     async onInit() {
         this.setLoading(true);
+
+        // Reset alphabet quick-jump offset cache on fresh library load
+        this._scrollLetterSeq = 0;
+        this._letterOffsetCache = new Map();
+        this._letterOffsetCache.set('#', 0);
         this.state.libraryId = this.params.id;
 
         // Special handling for 'virtual' library IDs (e.g. 'all' for search expansion, 'seerr' for Seerr discovery)
@@ -758,6 +767,15 @@ class LibraryPage extends Page {
             };
             eventBus.on('pref:libraryPageSize:changed', this._onLibraryPageSizeChanged);
         }
+
+        // Listen for dynamic alphabet quick-jump scroll mode toggles
+        if (!this._onAlphaPickerScrollModeChanged) {
+            this._onAlphaPickerScrollModeChanged = () => {
+                this.state.scrollAlphaChar = null;
+                this._renderAlphaPicker();
+            };
+            eventBus.on('pref:alphaPickerScrollMode:changed', this._onAlphaPickerScrollModeChanged);
+        }
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
         this.$('#btn-prev-top')?.addEventListener('click', () => this._handlePageChange(-1));
@@ -919,6 +937,11 @@ class LibraryPage extends Page {
         if (this._onLibraryPageSizeChanged) {
             eventBus.off('pref:libraryPageSize:changed', this._onLibraryPageSizeChanged);
             this._onLibraryPageSizeChanged = null;
+        }
+
+        if (this._onAlphaPickerScrollModeChanged) {
+            eventBus.off('pref:alphaPickerScrollMode:changed', this._onAlphaPickerScrollModeChanged);
+            this._onAlphaPickerScrollModeChanged = null;
         }
         this.$('#library-tabs')?.removeEventListener('click', this._onTabClick);
         this.$('#alpha-picker')?.removeEventListener('click', this._onAlphaClick);
@@ -1246,7 +1269,7 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds',
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds,SortName',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
             };
@@ -1286,7 +1309,14 @@ class LibraryPage extends Page {
             }
 
             // Apply Filters
-            if (this.state.nameStartsWith) {
+            /* -------------------------------------------------------------
+             * Alphabet Filter vs Scroll Mode:
+             * In unlimited scroll mode, the full library is loaded without
+             * single-letter NameStartsWith filtering so users can scroll
+             * seamlessly across the entire collection.
+             * ------------------------------------------------------------- */
+            const isScrollToLetterMode = isInfinite && storage.getItem('pref:alphaPickerScrollMode') !== 'false';
+            if (this.state.nameStartsWith && !isScrollToLetterMode) {
                 if (this.state.nameStartsWith === '#') {
                     params.NameLessThan = 'A';
                 } else {
@@ -2424,7 +2454,13 @@ class LibraryPage extends Page {
         const picker = this.$('#alpha-picker');
         if (!picker) return;
 
-        const activeChar = this.state.nameStartsWith;
+        /* -----------------------------------------------------------------
+         * Active Alphabet Highlight:
+         * Uses scrollAlphaChar in unlimited scroll mode, or nameStartsWith in
+         * standard filtering mode, following Apple HIG for immediate visual feedback.
+         * ----------------------------------------------------------------- */
+        const isScrollModeActive = this.state.isInfinite && storage.getItem('pref:alphaPickerScrollMode') !== 'false';
+        const activeChar = isScrollModeActive ? (this.state.scrollAlphaChar || this.state.nameStartsWith) : this.state.nameStartsWith;
 
         picker.innerHTML = this.state.alphaPickerChars
             .map((char) => {
@@ -4041,6 +4077,18 @@ class LibraryPage extends Page {
 
         const char = btn.dataset.char;
 
+        /* -----------------------------------------------------------------
+         * UNLIMITED SCROLL MODE QUICK-JUMP
+         * In unlimited mode, instead of wiping out the library to request only
+         * items starting with the selected letter, we scroll smoothly to that
+         * letter's section in the full library.
+         * ----------------------------------------------------------------- */
+        const isScrollMode = this.state.isInfinite && storage.getItem('pref:alphaPickerScrollMode') !== 'false';
+        if (isScrollMode) {
+            await this._scrollToLetter(char);
+            return;
+        }
+
         if (this.state.nameStartsWith === char) {
             // Toggle off
             this.state.nameStartsWith = null;
@@ -4074,6 +4122,255 @@ class LibraryPage extends Page {
         // Scroll to top of content
         const scrollContainer = this.$('#library-scroll-container');
         if (scrollContainer) scrollContainer.scrollTop = 0;
+    }
+
+    /**
+     * =========================================================================
+     * SCROLL TO LETTER (Alphabet Quick-Jump in Unlimited Scroll Mode)
+     * =========================================================================
+     * In unlimited mode, smoothly glides the viewport directly to the exact
+     * letter section using mathematically precise server offsets and real DOM
+     * geometry. Retargets seamlessly if the user rapidly scrubs across letters,
+     * following Apple Human Interface Guidelines for responsive fluid motion.
+     *
+     * Eliminates "letter above" issues by aligning to the exact DOM card rect
+     * and guarantees no dropped clicks via sequence tokens.
+     *
+     * @param {string} char - Target character ('#' or 'A'-'Z')
+     * =========================================================================
+     */
+    async _scrollToLetter(char) {
+        if (!char || this._isDestroyed) return;
+
+        // Sequence token to handle rapid user clicks without dropping or racing
+        const currentSeq = ++this._scrollLetterSeq;
+
+        // Visual feedback on the alphabet picker buttons immediately
+        this.state.scrollAlphaChar = char;
+        const allBtns = this.$('#alpha-picker')?.querySelectorAll('.alpha-btn');
+        allBtns?.forEach((b) => b.classList.toggle('active', b.dataset.char === char));
+
+        const activeBtn = this.$(`.alpha-btn[data-char="${char}"]`);
+        if (activeBtn) {
+            focusManager.focusElement(activeBtn);
+        }
+
+        const grid = this.$('#library-grid');
+        const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
+        if (!grid || !scrollContainer) return;
+
+        const columns = this.state._gridColumns || 7;
+
+        // ---------------------------------------------------------------------
+        // STEP 1: Determine exact 0-based target index in the full library
+        // ---------------------------------------------------------------------
+        let targetIndex = -1;
+
+        if (char === '#') {
+            targetIndex = 0;
+        } else if (this._letterOffsetCache && this._letterOffsetCache.has(char)) {
+            targetIndex = this._letterOffsetCache.get(char);
+        } else if (this._lastFetchContext?.params) {
+            try {
+                this._showInfiniteLoading(true);
+
+                const countParams = {
+                    ...this._lastFetchContext.params,
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    NameLessThan: char,
+                    Limit: 0,
+                    EnableTotalRecordCount: true
+                };
+                delete countParams.StartIndex;
+                delete countParams.NameStartsWith;
+
+                let countRes = null;
+                if (this._lastFetchContext.viewType === 'AlbumArtists') {
+                    countRes = await api.getAlbumArtists(countParams);
+                } else if (this._lastFetchContext.viewType === 'Artists') {
+                    countRes = await api.getMusicArtists(countParams);
+                } else {
+                    countRes = await api.getItems(countParams);
+                }
+
+                if (countRes && typeof countRes.TotalRecordCount === 'number') {
+                    targetIndex = countRes.TotalRecordCount;
+                    if (!this._letterOffsetCache) this._letterOffsetCache = new Map();
+                    this._letterOffsetCache.set(char, targetIndex);
+                }
+            } catch (err) {
+                log.warn('Failed to query letter offset from server:', err);
+            } finally {
+                this._showInfiniteLoading(false);
+            }
+        }
+
+        // Check if a newer letter click arrived while we were querying the server
+        if (currentSeq !== this._scrollLetterSeq || this._isDestroyed) return;
+
+        // Fallback: If server offset query failed, scan currently loaded items using normalized characters
+        if (targetIndex < 0) {
+            targetIndex = this._findTargetCharIndex(this.state.items, char);
+        }
+
+        // ---------------------------------------------------------------------
+        // STEP 2: Fetch missing items up to targetIndex if needed
+        // ---------------------------------------------------------------------
+        if (targetIndex >= 0 && targetIndex >= this.state.items.length && this.state.items.length < (this.state.totalRecordCount || 0)) {
+            this._showInfiniteLoading(true);
+            try {
+                const batchSize = this.state.limit || 100;
+                const needed = (targetIndex - this.state.items.length) + batchSize;
+                const fetchedItems = await this._fetchItemsBatch(this.state.items.length, needed);
+
+                // Check again for newer letter request before modifying state
+                if (currentSeq !== this._scrollLetterSeq || this._isDestroyed) return;
+
+                if (fetchedItems && fetchedItems.length > 0) {
+                    this.state.items = this.state.items.concat(fetchedItems);
+                    const collectionType = this.state.libraryInfo?.CollectionType;
+                    if ((collectionType === 'playlists' || collectionType === 'boxsets') && fetchedItems.length > 0) {
+                        await this._enrichCollectionItems(fetchedItems, collectionType);
+                    }
+                }
+
+                const countIndicator = this.$('#count-indicator');
+                if (countIndicator) {
+                    const total = this.state.totalRecordCount || this.state.items.length;
+                    countIndicator.textContent = i18n.t('ListPaging', [1, this.state.items.length, total]);
+                }
+            } catch (err) {
+                log.warn('Error fetching items for letter jump:', err);
+            } finally {
+                this._showInfiniteLoading(false);
+            }
+        }
+
+        // Final cancellation check before DOM reconstruction
+        if (currentSeq !== this._scrollLetterSeq || this._isDestroyed) return;
+
+        // Clamp targetIndex within loaded bounds
+        if (targetIndex < 0 || targetIndex >= this.state.items.length) {
+            targetIndex = Math.max(0, Math.min(targetIndex, this.state.items.length - 1));
+        }
+
+        // ---------------------------------------------------------------------
+        // STEP 3: Reconstruct virtual DOM window around target row
+        // ---------------------------------------------------------------------
+        const targetRow = Math.floor(targetIndex / columns);
+        const isListView = this.state.viewMode === 'list';
+        const ROWS_ABOVE = isListView ? 12 : 3;
+        const ROWS_BELOW = isListView ? 15 : 6;
+
+        const idealStart = Math.max(0, (targetRow - ROWS_ABOVE) * columns);
+        const idealEnd = Math.min(this.state.items.length, (targetRow + ROWS_BELOW + 1) * columns);
+        const rowHeight = this.state.gridCardRowHeight || this._measureGridRowHeight(grid, columns) || 350;
+
+        if (targetIndex < this.state.gridWindowStart || targetIndex >= this.state.gridWindowEnd) {
+            const chunkItems = this.state.items.slice(idealStart, idealEnd);
+            const spacerHeight = Math.floor(idealStart / columns) * rowHeight;
+
+            grid.innerHTML = `<div id="grid-top-spacer" style="height:${spacerHeight}px;width:100%;flex:0 0 100%"></div>${this._buildGridChunkHtml(chunkItems)}`;
+
+            this.state.gridWindowStart = idealStart;
+            this.state.gridWindowEnd = idealEnd;
+            this._hookGridCards(grid.querySelectorAll('.media-card'));
+            focusManager.invalidateCache('library-grid');
+        }
+
+        // ---------------------------------------------------------------------
+        // STEP 4: Smoothly glide viewport to target position using exact DOM coordinates
+        // ---------------------------------------------------------------------
+        let targetScrollTop = 0;
+        if (targetRow > 0) {
+            const allCards = grid.querySelectorAll('.media-card');
+            const cardDomIndex = targetIndex - this.state.gridWindowStart;
+            const targetCard = (cardDomIndex >= 0 && cardDomIndex < allCards.length)
+                ? allCards[cardDomIndex]
+                : grid.querySelector(`.media-card[data-item-id="${this.state.items[targetIndex]?.Id}"]`);
+
+            if (targetCard) {
+                const cardRect = targetCard.getBoundingClientRect();
+                const containerRect = scrollContainer.getBoundingClientRect();
+                targetScrollTop = Math.max(0, Math.round(scrollContainer.scrollTop + (cardRect.top - containerRect.top) - 20));
+            } else {
+                const gridOffsetTop = grid.offsetTop || 0;
+                targetScrollTop = Math.max(0, Math.round(gridOffsetTop + (targetRow * rowHeight) - 20));
+            }
+        }
+
+        this._lastGridScrollTop = targetScrollTop;
+        this._lastFocusItemIndex = targetIndex;
+
+        scrollController.smoothScrollTo(scrollContainer, targetScrollTop, 250, 'vertical');
+    }
+
+    /**
+     * =========================================================================
+     * GET ITEM SORT CHAR
+     * =========================================================================
+     * Extracts the normalized first comparison character from an item.
+     * Uses SortName first; if unavailable, removes leading articles ("The ", "A ", "An ")
+     * and quotation/bracket punctuation to match server-side alphabetical sorting.
+     *
+     * @param {Object} item - Media item object
+     * @returns {string} Normalized uppercase character or ''
+     * =========================================================================
+     */
+    _getItemSortChar(item) {
+        if (!item) return '';
+        let name = (item.SortName || item.Name || '').trim();
+        // If SortName was not provided by API, strip common English leading articles
+        if (!item.SortName && name) {
+            const match = name.match(/^(the|a|an)\s+/i);
+            if (match) {
+                name = name.slice(match[0].length).trim();
+            }
+        }
+        // Remove leading quotes, brackets, or punctuation
+        name = name.replace(/^["'‘“«\[(]+/, '').trim();
+        return name.charAt(0).toUpperCase();
+    }
+
+    /**
+     * =========================================================================
+     * FIND TARGET CHAR INDEX
+     * =========================================================================
+     * Fallback scanner that locates the first item matching or following the
+     * target letter in the currently loaded items array.
+     *
+     * @param {Array} items - Array of loaded library items
+     * @param {string} char - Target character ('#' or 'A'-'Z')
+     * @returns {number} 0-based index in items, or -1 if not found
+     * =========================================================================
+     */
+    _findTargetCharIndex(items, char) {
+        if (!items || !items.length) return -1;
+
+        if (char === '#') {
+            const idx = items.findIndex((item) => {
+                const firstChar = this._getItemSortChar(item);
+                return firstChar && (firstChar < 'A' || firstChar > 'Z');
+            });
+            return idx !== -1 ? idx : 0;
+        }
+
+        const targetChar = char.toUpperCase();
+
+        // 1. Direct match: first item starting with this letter
+        const exactIdx = items.findIndex((item) => {
+            return this._getItemSortChar(item) === targetChar;
+        });
+        if (exactIdx !== -1) return exactIdx;
+
+        // 2. Nearest successor match: first item starting with a letter greater than target
+        const nextIdx = items.findIndex((item) => {
+            const firstChar = this._getItemSortChar(item);
+            return firstChar >= 'A' && firstChar > targetChar;
+        });
+
+        return nextIdx;
     }
 
     /**

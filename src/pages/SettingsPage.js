@@ -5251,6 +5251,26 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- -------------------------------------------------------------
+                 * Alphabet Quick-Jump Scroll Behavior (Only in Unlimited Mode)
+                 * Enables scrolling directly to letter anchors instead of querying
+                 * and filtering down the library items strictly to that letter.
+                 * Designed with Apple Human Interface Guidelines for sleek, fluid
+                 * tactile control on TV and desktop navigation.
+                 * ------------------------------------------------------------- -->
+                <div class="setting-item" id="alpha-picker-scroll-mode-item" style="${storage.getItem('pref:libraryPageSize') === 'unlimited' ? '' : 'display: none;'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelAlphaPickerScrollMode">${i18n.t('LabelAlphaPickerScrollMode') || 'Alphabet Quick-Jump Action'}</span>
+                        <span class="setting-description" data-i18n="AlphaPickerScrollModeDescription">${i18n.t('AlphaPickerScrollModeDescription') || 'In unlimited mode, scroll directly to letter sections instead of filtering the library.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:alphaPickerScrollMode') !== 'false' ? 'active' : ''}" 
+                                id="toggle-alpha-picker-scroll-mode" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelOnlyBlurHashBackdrop">${i18n.t('LabelOnlyBlurHashBackdrop') || 'Only Use BlurHash for Details Backdrop'}</span>
@@ -7600,6 +7620,27 @@ class SettingsPage extends Page {
             });
         }
 
+        /* -----------------------------------------------------------------
+         * Toggle Alpha Picker Scroll Mode (under Library Item Limit)
+         * In unlimited mode, clicking an alphabet letter glides directly to
+         * that letter anchor instead of reloading filtered single-letter lists.
+         * ----------------------------------------------------------------- */
+        const alphaPickerScrollModeBtn = this.$('#toggle-alpha-picker-scroll-mode');
+        if (alphaPickerScrollModeBtn) {
+            alphaPickerScrollModeBtn.addEventListener('click', () => {
+                // Read current state (defaults to true if unset)
+                const isCurrentActive = storage.getItem('pref:alphaPickerScrollMode') !== 'false';
+                const newValue = !isCurrentActive;
+
+                // Save to local storage and toggle premium iOS-style switch state
+                storage.setItem('pref:alphaPickerScrollMode', newValue.toString());
+                alphaPickerScrollModeBtn.classList.toggle('active', newValue);
+
+                // Emit event for real-time listeners across active views
+                eventBus.emit('pref:alphaPickerScrollMode:changed', newValue);
+            });
+        }
+
         // Toggle Only BlurHash Backdrop
         const onlyBlurhashBackdropBtn = this.$('#toggle-only-blurhash-backdrop');
         if (onlyBlurhashBackdropBtn) {
@@ -9860,7 +9901,10 @@ class SettingsPage extends Page {
 
                     // Save Setting based on type
                     if (settingConfig) {
-                        if (id === 'badge-style-select') {
+                        if (id === 'alpha-picker-position-select') {
+                            // SPECIAL CASE: Alphabet Selector Position handled by LayoutManager
+                            layoutManager.setAlphaPickerPosition(newValue);
+                        } else if (id === 'badge-style-select') {
                             // SPECIAL CASE: Badge Style handled by LayoutManager
                             layoutManager.setBadgeStyle(newValue);
                         } else if (id === 'button-style-select') {
@@ -10007,6 +10051,19 @@ class SettingsPage extends Page {
                                 if (animToggleItem) {
                                     const isCarouselEnabled = storage.getItem('pref:heroCarousel') !== 'false';
                                     animToggleItem.style.display = isCarouselEnabled && newValue === 'progress' ? '' : 'none';
+                                }
+                            }
+
+                            /* -------------------------------------------------------------
+                             * Dynamic Sub-Setting Visibility for Library Page Size
+                             * When 'unlimited' is selected, reveal the alphabet scroll mode toggle;
+                             * otherwise, hide it to maintain a clean Apple HIG layout.
+                             * ------------------------------------------------------------- */
+                            if (settingConfig.key === 'pref:libraryPageSize') {
+                                const alphaScrollItem = this.$('#alpha-picker-scroll-mode-item');
+                                if (alphaScrollItem) {
+                                    alphaScrollItem.style.display = String(newValue) === 'unlimited' ? '' : 'none';
+                                    focusManager.invalidateCache('settings-content');
                                 }
                             }
 
