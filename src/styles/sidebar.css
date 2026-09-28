@@ -139,16 +139,29 @@ body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
     background: #000000 !important;
 }
 
-/* Ambient Theme Specific Overrides for Always Collapsed Mode */
+/* 
+ * Ambient Theme Specific Overrides: Ensure sidebar background is fully transparent
+ * across all navigation layouts and visibility modes, letting atmospheric glows bleed through.
+ */
+html[data-theme-mode="ambient"] .sidebar,
+html[data-theme-mode="ambient"] .sidebar.expanded,
+html[data-theme-mode="ambient"] .sidebar:hover,
+html[data-theme-mode="ambient"] .sidebar.transparent-collapsed,
+html[data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded,
+html[data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar,
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.expanded,
-html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar:hover {
-    background: transparent !important;
-}
-
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar:hover,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed,
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
+    /* Pure transparency for ambient glow backdrop penetration */
     background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
 }
+
 
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {

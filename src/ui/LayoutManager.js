@@ -684,6 +684,7 @@ class LayoutManager {
             // Elegant, matte ultra-dark background.
             // A deeply saturated charcoal canvas serves as the foundation.
             // Translucent material cards absorb the dynamically-cast ambient gradients.
+            // Set sidebar background to transparent to ensure ambient glow bleeds through cleanly.
             dynamicCss += `
             --jf-background: #0a0b0c;
             --jf-background-alt: #070809;
@@ -691,7 +692,8 @@ class LayoutManager {
             --jf-card-bg: rgba(255, 255, 255, 0.045);
             --jf-card-bg-hover: rgba(255, 255, 255, 0.1);
             --jf-divider: rgba(255, 255, 255, 0.06);
-            --jf-navbar-bg: rgba(7, 8, 9, 0.85);`;
+            --jf-navbar-bg: rgba(7, 8, 9, 0.85);
+            --sidebar-bg: transparent;`;
         } else if (this._themeMode === THEME_MODES.BLACK) {
             dynamicCss += `
             --jf-background: #000000;
