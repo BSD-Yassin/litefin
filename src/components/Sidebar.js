@@ -280,8 +280,13 @@ class Sidebar extends Component {
         // ---------------------------------------------------------------------
         // FLOATING ISLAND GEOMETRY RESIZE LISTENER
         // ---------------------------------------------------------------------
-        // Keep stationary pill bounds in sync with screen dimension adjustments
-        this._onResizeGeometry = () => this._updateFloatingIslandGeometry();
+        // Keep stationary pill bounds and floating popovers in sync with screen dimension adjustments
+        this._onResizeGeometry = () => {
+            this._updateFloatingIslandGeometry();
+            if (this.floatingLibrariesOpen) {
+                this._toggleFloatingLibraries(true);
+            }
+        };
         window.addEventListener('resize', this._onResizeGeometry);
 
         // Initial geometry calculation once DOM tree mounts and reflow settles
@@ -1149,6 +1154,21 @@ class Sidebar extends Component {
         const childBtns = subLibs.querySelectorAll('.library-item');
 
         if (next) {
+            /*
+             * =================================================================
+             * FLOATING SUB-LIBRARIES ATTACHMENT & STACKING ISOLATION
+             * =================================================================
+             * In modern collapsed, floating-buttons, and floating-island modes,
+             * the sub-libraries menu acts as a standalone floating popover.
+             * We ensure it is attached directly to the root sidebar element (this.el)
+             * so it is not constrained or shifted by .sidebar-content's flexbox
+             * auto margins or overflow scrolling.
+             * =================================================================
+             */
+            if (layoutManager.isModernCollapsedSidebarLayout() && subLibs.parentElement !== this.el) {
+                this.el.appendChild(subLibs);
+            }
+
             subLibs.removeAttribute('hidden');
             subLibs.style.display = 'flex';
 
@@ -1158,14 +1178,29 @@ class Sidebar extends Component {
                 scrollContainer.scrollTop = 0;
             }
 
-            // Calculate vertical positioning beside the libraries button
-            // Using getBoundingClientRect provides rock-solid positioning relative to root sidebar
+            /*
+             * =================================================================
+             * POPOVER VERTICAL ALIGNMENT BESIDE LIBRARIES BUTTON
+             * =================================================================
+             * Follows Apple Human Interface Guidelines:
+             * - Accurately aligns the popover directly adjacent to the anchor icon
+             * - Measures against the actual offsetParent to prevent double offsets
+             * - Clamps top offset within screen viewport bounds for TV safe areas
+             * =================================================================
+             */
             const libRect = libBtn.getBoundingClientRect();
-            const sidebarRect = this.el.getBoundingClientRect();
-            const topOffset = (libRect && sidebarRect && libRect.top > 0)
-                ? (libRect.top - sidebarRect.top)
+            const parentEl = subLibs.offsetParent || this.el;
+            const parentRect = parentEl.getBoundingClientRect();
+            const topOffset = (libRect && parentRect && libRect.top > 0)
+                ? (libRect.top - parentRect.top)
                 : (typeof libBtn.offsetTop === 'number' ? libBtn.offsetTop : 150);
-            subLibs.style.top = `${Math.max(10, topOffset - 6)}px`;
+
+            // Keep popover safely within the TV screen viewport bounds
+            const viewportHeight = window.innerHeight || 1080;
+            const subLibsHeight = subLibs.offsetHeight || 250;
+            const maxTop = Math.max(10, viewportHeight - subLibsHeight - 20);
+            const clampedTop = Math.min(Math.max(10, topOffset - 6), maxTop);
+            subLibs.style.top = `${clampedTop}px`;
 
             childBtns.forEach((btn) => {
                 btn.classList.remove('hidden');
@@ -1713,14 +1748,23 @@ class Sidebar extends Component {
                 el.style.display = shouldHide ? 'none' : '';
                 sidebarContent.appendChild(el);
 
-                // If this is the modern libraries container, place sub-libraries container right after it
+                // If this is the modern libraries container, place sub-libraries container accordingly
                 if (id === 'librariesContainer' && subLibrariesContainer && !showCollapsedLibIcons) {
                     if (shouldHide) {
                         subLibrariesContainer.style.display = 'none';
                         subLibrariesContainer.classList.add('hidden');
                         subLibrariesContainer.setAttribute('hidden', '');
                     }
-                    sidebarContent.appendChild(subLibrariesContainer);
+                    /*
+                     * In collapsed/floating layouts, attach subLibrariesContainer directly to
+                     * sidebarEl so that the floating popover is positioned in the root sidebar's
+                     * coordinate space without getting displaced by sidebarContent flexbox centering.
+                     */
+                    if (layoutManager.isModernCollapsedSidebarLayout()) {
+                        sidebarEl.appendChild(subLibrariesContainer);
+                    } else {
+                        sidebarContent.appendChild(subLibrariesContainer);
+                    }
                 }
             });
         } else {
