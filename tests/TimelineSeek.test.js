@@ -797,9 +797,9 @@ test('Hardware player backends (Tizen, WebOS, HTML5) implement isSeeking and pos
         'TizenAVPlayer.unpause must queue play when seeking or deferred'
     );
     assert.ok(
-        tizenSource.includes('this._seekInProgress = true;') &&
-        tizenSource.includes('SUBTITLE_TRACK_CHANGE_COOLDOWN_MS'),
-        'TizenAVPlayer.seek must mark _seekInProgress during subtitle cooldown'
+        tizenSource.includes('SUBTITLE_TRACK_CHANGE_COOLDOWN_MS') &&
+        tizenSource.includes('this._deferredSeekTimerId !== null'),
+        'TizenAVPlayer.seek must track subtitle cooldown deferral without deadlocking _seekInProgress'
     );
 
     // 2. WebOSPlayer
@@ -815,5 +815,96 @@ test('Hardware player backends (Tizen, WebOS, HTML5) implement isSeeking and pos
         htmlSource.includes('this._pendingPlayAfterSeek = true;'),
         'HtmlVideoPlayer.unpause must queue play when video is seeking'
     );
+});
+
+test('OSDController: consecutive debounced seeks preserve resume intent and unpause on final landing', () => {
+    const { osd, advance } = setup(false, false);
+    let isSeekingInHardware = false;
+    const listeners = new Map();
+
+    osd._player.on = (event, fn) => {
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event).push(fn);
+    };
+    osd._player.seek = () => {
+        isSeekingInHardware = true;
+        // Fire player 'seek' event to verify _onPlayerSeek does not wipe _seekPendingResume
+        const seekHandlers = listeners.get('seek') || [];
+        for (const handler of seekHandlers) handler({ positionTicks: 50000000 });
+    };
+    Object.defineProperty(osd._player, 'isSeeking', {
+        get: () => isSeekingInHardware
+    });
+
+    osd._player.on('seek', (e) => osd._onPlayerSeek(e));
+    osd._player.on('seeked', (e) => osd._onPlayerSeeked(e));
+
+    // First scrub and seek
+    osd.handleInput('right');
+    assert.equal(osd._player.isPaused(), true);
+    advance(800); // Debounce fires seek
+
+    assert.equal(isSeekingInHardware, true);
+    assert.equal(osd._seekPendingResume, true);
+
+    // Second scrub while first seek is still in flight in hardware
+    osd.handleInput('right');
+    // Ensure resume intent was preserved despite player being currently paused
+    assert.equal(osd._seekResumePlayback, true);
+
+    advance(800); // Second seek committed
+    assert.equal(osd._seekPendingResume, true);
+
+    // Hardware lands and emits seeked
+    isSeekingInHardware = false;
+    const seekedHandlers = listeners.get('seeked') || [];
+    for (const handler of seekedHandlers) handler();
+
+    // Verify playback successfully resumed
+    assert.equal(osd._seekPendingResume, false);
+    assert.equal(osd._player.isPaused(), false);
+});
+
+test('OSDController: consecutive confirmed seeks preserve resume intent across confirmations', () => {
+    const { osd } = setup(true, false);
+    let isSeekingInHardware = false;
+    const listeners = new Map();
+
+    osd._player.on = (event, fn) => {
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event).push(fn);
+    };
+    osd._player.seek = () => {
+        isSeekingInHardware = true;
+        const seekHandlers = listeners.get('seek') || [];
+        for (const handler of seekHandlers) handler({ positionTicks: 50000000 });
+    };
+    Object.defineProperty(osd._player, 'isSeeking', {
+        get: () => isSeekingInHardware
+    });
+
+    osd._player.on('seek', (e) => osd._onPlayerSeek(e));
+    osd._player.on('seeked', (e) => osd._onPlayerSeeked(e));
+
+    // First confirmed seek
+    osd.handleInput('right');
+    osd.handleInput('enter');
+    assert.equal(isSeekingInHardware, true);
+    assert.equal(osd._seekPendingResume, true);
+
+    // Second scrub and confirm while first seek is in flight
+    osd.handleInput('right');
+    assert.equal(osd._seekResumePlayback, true);
+    osd.handleInput('enter');
+    assert.equal(osd._seekPendingResume, true);
+
+    // Hardware lands and emits seeked
+    isSeekingInHardware = false;
+    const seekedHandlers = listeners.get('seeked') || [];
+    for (const handler of seekedHandlers) handler();
+
+    // Playback successfully resumed
+    assert.equal(osd._seekPendingResume, false);
+    assert.equal(osd._player.isPaused(), false);
 });
 

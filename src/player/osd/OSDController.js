@@ -3248,11 +3248,21 @@ export default class OSDController extends Component {
                  * pausePlaybackOnScrub. If enabled (true by default), capture the
                  * previous playback state and pause the video so the seek preview
                  * remains stationary while the user maneuvers the timeline.
+                 *
+                 * CRITICAL RESUME INTENT PRESERVATION:
+                 * If consecutive seeks occur while a previous seek is still in flight
+                 * or waiting on a hardware 'seeked' event, the player is already paused.
+                 * We must preserve the existing resume intent (_seekResumePlayback or
+                 * _seekPendingResume) rather than overwriting it with false.
                  * ====================================================================
                  */
                 if (PlayerSettings.get('pausePlaybackOnScrub')) {
                     // Record whether playback was actively running before scrub started
-                    this._seekResumePlayback = !this._player.isPaused();
+                    this._seekResumePlayback = Boolean(
+                        this._seekResumePlayback ||
+                        this._seekPendingResume ||
+                        !this._player.isPaused()
+                    );
                     // Pause active playback during the scrub operation
                     if (this._seekResumePlayback && typeof this._player.pause === 'function') {
                         this._player.pause();
@@ -3879,11 +3889,15 @@ export default class OSDController extends Component {
         if (tooltip) tooltip.classList.remove('visible');
         this._hideTrickplayThumb();
 
-        if (this._seekResumeTimeout) {
-            clearTimeout(this._seekResumeTimeout);
-            this._seekResumeTimeout = null;
+        // Only cancel pending resume and safety timeout if we are NOT restoring playback
+        // (i.e. explicit cancellation such as user pressing pause or back)
+        if (!restorePlayback) {
+            if (this._seekResumeTimeout) {
+                clearTimeout(this._seekResumeTimeout);
+                this._seekResumeTimeout = null;
+            }
+            this._seekPendingResume = false;
         }
-        this._seekPendingResume = false;
 
         if (restorePlayback) this._restoreSeekPlayback(resumePlayback);
     }
@@ -3897,8 +3911,12 @@ export default class OSDController extends Component {
             return;
         }
 
-        // Clear OSD's internal seek state whenever a seek happens (could be remote or chapter)
-        this._clearSeekState();
+        // Only clear OSD seek state if an uncommitted scrub session is active.
+        // If this._seekTargetTicks is null, the seek was committed by OSD debounce
+        // or confirmation, and clearing here would prematurely disarm _seekPendingResume.
+        if (this._seekTargetTicks !== null) {
+            this._clearSeekState(false);
+        }
 
         if (e && e.positionTicks !== undefined) {
             // Optimistic update for UI responsiveness

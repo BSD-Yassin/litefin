@@ -1641,11 +1641,35 @@ export class TizenAVPlayer {
         // Track that a native hardware seek operation is actively in flight
         this._seekInProgress = true;
 
+        /*
+         * ====================================================================
+         * HARDWARE SEEK FAILSAFE RECOVERY TIMER
+         * ====================================================================
+         * On certain Samsung firmware, AVPlay's native C++ player can silently
+         * drop asynchronous callbacks if a network hitch or demuxer flush occurs
+         * simultaneously. Without an authoritative failsafe timeout, _seekInProgress
+         * remains stuck true forever, permanently locking out subsequent user seeks
+         * and leaving the player unresponsive to remote control play/pause inputs.
+         * We arm a 6000ms watchdog that clears the flag if hardware stalls.
+         * ====================================================================
+         */
+        const failsafeTimer = setTimeout(() => {
+            if (this._seekInProgress) {
+                log.warn(`[SeekTelemetry] hardware seekTo timed out after 6000ms for target=${requestedMs}ms — clearing seekInProgress flag`);
+                this._seekInProgress = false;
+            }
+        }, 6000);
+
+        const clearFailsafe = () => {
+            clearTimeout(failsafeTimer);
+        };
+
         try {
             this._avplay.seekTo(
                 ms,
                 () => {
                     // Mark seek finished in native hardware
+                    clearFailsafe();
                     this._seekInProgress = false;
                     const durationMs = Date.now() - seekStartTime;
                     let landedMs = 0;
@@ -1671,6 +1695,7 @@ export class TizenAVPlayer {
                 },
                 (e) => {
                     // Mark seek finished on hardware error
+                    clearFailsafe();
                     this._seekInProgress = false;
                     const durationMs = Date.now() - seekStartTime;
                     log.warn(`[SeekTelemetry] seekTo FAILED after ${durationMs}ms for target=${requestedMs}ms before=${beforeMs}ms:`, e);
@@ -1678,6 +1703,7 @@ export class TizenAVPlayer {
                 }
             );
         } catch (e) {
+            clearFailsafe();
             this._seekInProgress = false;
             log.warn('_safeSeekTo threw synchronously:', e);
             if (onError) onError(e);
@@ -2320,16 +2346,18 @@ export class TizenAVPlayer {
                 const remainingMs = SUBTITLE_TRACK_CHANGE_COOLDOWN_MS - timeSinceTrackChange;
                 log.debug(`seek(): subtitle track change cooldown active (${remainingMs}ms remaining) — deferring seek`);
 
-                // Mark seek in progress so any intermediate unpause() calls queue playback
-                // rather than resuming audio/video at the pre-seek position during cooldown.
-                this._seekInProgress = true;
-
                 // Cancel any previously deferred seek (user may have pressed seek multiple times)
                 if (this._deferredSeekTimerId !== null) {
                     clearTimeout(this._deferredSeekTimerId);
                 }
 
-                // Store the target and schedule execution after the cooldown expires
+                // Store the target and schedule execution after the cooldown expires.
+                // NOTE: We deliberately do NOT set this._seekInProgress = true here!
+                // Setting _seekInProgress while deferred causes the re-entrant this.seek()
+                // call in the timer callback to trigger the 'if (this._seekInProgress)' guard
+                // at the top of seek(), queueing into _queuedSeekPositionMs and returning
+                // without ever calling _safeSeekTo. Cooldown deferral is already safely gated
+                // by (this._deferredSeekTimerId !== null) in both isSeeking and unpause().
                 this._deferredSeekTicks = positionTicks;
                 this._deferredSeekTimerId = setTimeout(() => {
                     this._deferredSeekTimerId = null;
@@ -2338,8 +2366,6 @@ export class TizenAVPlayer {
                     if (pendingTicks !== null && this._avplay && this._isPrepared) {
                         log.info(`seek(): executing deferred seek to ${pendingTicks / 10000}ms after subtitle track change cooldown`);
                         this.seek(pendingTicks, options);
-                    } else {
-                        this._seekInProgress = false;
                     }
                 }, remainingMs + 50); // +50ms safety margin
                 return;
@@ -2418,6 +2444,34 @@ export class TizenAVPlayer {
                 positionMs,
                 (landedMs) => {
                     this._seekInProgress = false;
+
+                    /*
+                     * ================================================================
+                     * CONSECUTIVE QUEUED SEEK EXECUTION PRIORITY
+                     * ================================================================
+                     * If another seek arrived while this hardware seek was in flight
+                     * (e.g. user pressed seek repeatedly in rapid succession), execute
+                     * the queued target immediately.
+                     *
+                     * CRITICAL PIPELINE STABILITY RULE:
+                     * We MUST NOT emit 'seeked' or resume playback (_checkNativePlay) here!
+                     * Emitting 'seeked' prematurely signals OSDController and JellyfinPlayer
+                     * to unpause and transition AVPlay to PLAYING state right before we call
+                     * seekTo() for the queued position. In Tizen AVPlay, issuing seekTo()
+                     * during an unpause transition causes the decoder to reject the seek,
+                     * stall in READY, or abort playback entirely.
+                     * ================================================================
+                     */
+                    const queuedMs = this._queuedSeekPositionMs;
+                    if (queuedMs !== null) {
+                        this._queuedSeekPositionMs = null;
+                        if (this._avplay && this._isPrepared) {
+                            const queuedTicks = queuedMs * 10000;
+                            log.debug(`seek(): executing queued seek to ${queuedMs}ms without intermediate seeked/resume`);
+                            this.seek(queuedTicks, { suppressWaitingEvent: true });
+                            return;
+                        }
+                    }
 
                     // ─────────────────────────────────────────────────────────────────
                     // Post-Seek Time Anchor & Demuxer Landed Confirmation:
@@ -2521,17 +2575,6 @@ export class TizenAVPlayer {
                         this._checkNativePlay();
                     }
 
-                    // ── Execute queued seek if another seek arrived in flight ────
-                    const queuedMs = this._queuedSeekPositionMs;
-                    if (queuedMs !== null) {
-                        this._queuedSeekPositionMs = null;
-                        if (this._avplay && this._isPrepared) {
-                            const queuedTicks = queuedMs * 10000;
-                            log.debug('seek(): executing queued seek after previous seek completed');
-                            this.seek(queuedTicks, { suppressWaitingEvent: true });
-                        }
-                    }
-
                     // ── Post-Seek Safety Resume Net ──────────────────────────────
                     // On certain Tizen firmware, seekTo can leave the pipeline stuck
                     // in READY without firing buffering events. This safety timer
@@ -2553,6 +2596,18 @@ export class TizenAVPlayer {
                 (e) => {
                     this._seekInProgress = false;
                     this._isNativeBuffering = false;
+
+                    // If a subsequent seek was queued, prioritize executing it over error escalation
+                    const queuedMs = this._queuedSeekPositionMs;
+                    if (queuedMs !== null) {
+                        this._queuedSeekPositionMs = null;
+                        if (this._avplay && this._isPrepared) {
+                            const queuedTicks = queuedMs * 10000;
+                            log.debug(`seek(): executing queued seek to ${queuedMs}ms after failed intermediate seek`);
+                            this.seek(queuedTicks, { suppressWaitingEvent: true });
+                            return;
+                        }
+                    }
 
                     // Restore buffering state if it completed during the failed seek
                     if (this._bufferingCompleteDuringSeek) {
@@ -2597,17 +2652,6 @@ export class TizenAVPlayer {
                         log.warn('seek(): seekTo failed, trying to resume playback:', e);
                         this._isTizenPlaying = false;
                         this._checkNativePlay();
-                    }
-
-                    // Execute queued seek on error too
-                    const queuedMs = this._queuedSeekPositionMs;
-                    if (queuedMs !== null) {
-                        this._queuedSeekPositionMs = null;
-                        if (this._avplay && this._isPrepared) {
-                            const queuedTicks = queuedMs * 10000;
-                            log.debug('seek(): executing queued seek after failed seek');
-                            this.seek(queuedTicks, { suppressWaitingEvent: true });
-                        }
                     }
 
                     // Arm the safety net as a fallback.
@@ -3222,11 +3266,11 @@ export class TizenAVPlayer {
     }
 
     /**
-     * Check if seeking is currently active or deferred
-     * @returns {boolean} True if seek operation or cooldown deferral is active
+     * Check if seeking is currently active, queued, or deferred
+     * @returns {boolean} True if seek operation, queued seek, or cooldown deferral is active
      */
     get isSeeking() {
-        return Boolean(this._seekInProgress || this._deferredSeekTimerId !== null);
+        return Boolean(this._seekInProgress || this._deferredSeekTimerId !== null || this._queuedSeekPositionMs !== null);
     }
 
     // ========================================================================

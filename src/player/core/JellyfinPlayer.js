@@ -706,27 +706,11 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
-     * Check if player or active hardware backend is currently seeking.
-     * Prevents race conditions where higher-level components or remote events
-     * attempt to resume playback before the hardware demuxer has settled.
-     * 
-     * @returns {boolean} True if seek operation is actively in flight
+     * Check if player is currently seeking
+     * @returns {boolean}
      */
     get isSeeking() {
-        /*
-         * Query both JellyfinPlayer's internal seek flag as well as the active
-         * hardware backend's native seeking property (e.g. video.seeking on HTML5,
-         * or _seekInProgress / deferred timers on Samsung AVPlay).
-         */
-        const backendSeeking = Boolean(
-            this._backend && (
-                typeof this._backend.isSeeking === 'function'
-                    ? this._backend.isSeeking()
-                    : this._backend.isSeeking
-            )
-        );
-
-        return Boolean(this._isSeeking || backendSeeking);
+        return Boolean(this._isSeeking);
     }
 
     /**
@@ -2098,7 +2082,6 @@ export class JellyfinPlayer extends EventEmitter {
         if (this.isSeeking) {
             log.info('[JellyfinPlayer] unpause() requested while seek in flight — queueing play for post-seek landing');
             this._pendingPlayAfterSeek = true;
-            this._isPaused = false;
             return;
         }
 
@@ -2120,7 +2103,7 @@ export class JellyfinPlayer extends EventEmitter {
      * Toggle play/pause
      */
     togglePlay() {
-        if (this._isPaused) {
+        if (this._isPaused || this._pendingPlayAfterSeek) {
             this.unpause();
         } else {
             this.pause();
@@ -2149,6 +2132,7 @@ export class JellyfinPlayer extends EventEmitter {
         this._isPlaying = false;
         this._isPaused = false;
         this._isSeeking = false;
+        this._pendingPlayAfterSeek = false;
         const clearTimer = typeof clearTimeout !== 'undefined'
             ? clearTimeout
             : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
@@ -2194,8 +2178,15 @@ export class JellyfinPlayer extends EventEmitter {
             : (typeof globalThis !== 'undefined' ? globalThis.setTimeout : null);
         if (setTimer) {
             this._seekFailsafeTimeout = setTimer(() => {
+                log.warn('[JellyfinPlayer] Seek failsafe timeout (5s) fired — resetting isSeeking');
                 this._isSeeking = false;
                 this._seekFailsafeTimeout = null;
+                // Dispatch any queued play that was waiting for seek completion
+                if (this._pendingPlayAfterSeek) {
+                    log.info('[JellyfinPlayer] Releasing deferred play upon seek failsafe timer expiry');
+                    this._pendingPlayAfterSeek = false;
+                    this.unpause();
+                }
             }, 5000);
         }
 
