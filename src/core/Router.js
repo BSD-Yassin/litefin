@@ -242,7 +242,9 @@ class Router {
 
                 // Capture state from current page before destroying
                 // This saves focus, scroll, and page-specific state
-                if (this._currentPage) {
+                // Only capture state into history if this is forward navigation;
+                // during back navigation, currentEntry is the DESTINATION page entry!
+                if (this._currentPage && !this._isBackNavigation) {
                     const capturedState = navigationState.captureState(this._currentPage);
 
                     // Update the current history entry with captured state

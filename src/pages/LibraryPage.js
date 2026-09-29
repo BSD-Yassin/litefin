@@ -116,6 +116,10 @@ class LibraryPage extends Page {
         // Mark as async page for Navigation State
         // (Page.init won't restore scroll/focus until we call restoreScrollFocusWhenReady)
         this._isAsyncPage = true;
+
+        // Restoration guard flag: suppresses reactive grid eviction and scroll calculations
+        // while the saved focus position and DOM window boundaries are settling
+        this._isRestoringFocus = false;
     }
 
     render() {
@@ -481,6 +485,10 @@ class LibraryPage extends Page {
             this.setLoading(false);
 
             // 3. Restore Focus
+            // Mark restoration active so intermediate scroll events and layout shifts
+            // do not trigger eviction or window sync before focus has landed
+            this._isRestoringFocus = true;
+
             requestAnimationFrame(() => {
                 let restoredFocus = false;
                 const targetId = storage.getItem('pref:disableFocusRestore') === 'true' ? null : savedState.focusItemId;
@@ -497,30 +505,69 @@ class LibraryPage extends Page {
                     // restoration silently fails for items past the initial chunk.
                     const grid = this.$('#library-grid');
                     if (grid && this.state.items && this.state._gridColumns) {
-                        const itemIndex = this.state.items.findIndex((item) => item.Id === targetId);
+                        const targetStr = String(targetId);
+                        const itemIndex = this.state.items.findIndex(
+                            (item) => String(item.Id) === targetStr || String(item.id) === targetStr
+                        );
+
                         if (itemIndex >= 0) {
                             const columns = this.state._gridColumns;
+
+                            // Append chunks until the target item index is encompassed by windowEnd
                             while (
                                 itemIndex >= this.state.gridWindowEnd &&
                                 this.state.gridWindowEnd < this.state.items.length
                             ) {
                                 this._appendGridChunk(grid, this.state.items, columns);
                             }
+
+                            // Prepend chunks if the item was evicted above the top boundary
                             while (itemIndex < this.state.gridWindowStart && this.state.gridWindowStart > 0) {
                                 this._prependGridChunk(grid, this.state.items, columns);
                             }
+
+                            // Pre-emptively record target item index so the focus direction
+                            // evaluator starts from this exact card on the next user keypress
+                            this._lastFocusItemIndex = itemIndex;
                         }
                     }
 
-                    const savedElement = sectionContainer.querySelector(
-                        `[data-item-id="${targetId}"], [data-id="${targetId}"], [id="${targetId}"]`
-                    );
+                    // =========================================================================
+                    // TWO-PHASE LAYOUT FLUSH (TIZEN / WEBKIT DOM SETTLE)
+                    // =========================================================================
+                    // When cards are injected via insertAdjacentHTML, WebKit has not calculated
+                    // their layout geometries (offsetParent, offsetTop, and bounding rects).
+                    // Calling focusElement in the same tick causes ScrollController to read an
+                    // offsetTop of 0, instantly snapping scrollTop to 0 and triggering bottom
+                    // eviction in _syncGridWindow, destroying the target card.
+                    // A second requestAnimationFrame flushes layout so geometry is 100% stable.
+                    // =========================================================================
+                    requestAnimationFrame(() => {
+                        const savedElement = sectionContainer.querySelector(
+                            `[data-item-id="${targetId}"], [data-id="${targetId}"], [id="${targetId}"]`
+                        );
 
-                    if (savedElement) {
-                        this.setActiveSection(sectionId, false);
-                        focusManager.focusElement(savedElement, { instantScroll: true });
-                        restoredFocus = true;
-                    }
+                        if (savedElement) {
+                            this.setActiveSection(sectionId, false);
+                            focusManager.focusElement(savedElement, { instantScroll: true });
+                            restoredFocus = true;
+                        }
+
+                        // If element was not found in DOM, fallback to standard section setup
+                        if (!restoredFocus) {
+                            this._setupFocus();
+                        }
+
+                        // Evict state entry once consumed to prevent stale reapplications
+                        state.delete(cacheKey);
+                        this.markReady();
+
+                        // Release restoration guard on the following frame once layout has stabilized
+                        requestAnimationFrame(() => {
+                            this._isRestoringFocus = false;
+                        });
+                    });
+                    return;
                 }
 
                 if (!restoredFocus) {
@@ -529,6 +576,7 @@ class LibraryPage extends Page {
 
                 state.delete(cacheKey);
                 this.markReady();
+                this._isRestoringFocus = false;
             });
 
             return;
@@ -659,7 +707,13 @@ class LibraryPage extends Page {
         // above synchronously, so _loadItems() is guaranteed to see the correct value.
         await Promise.all([infoFetchPromise, this._loadItems()]);
 
-        this._setupFocus();
+        // If router provided pending navigation state (cache miss or fallback),
+        // restore scroll/focus via NavigationState instead of blindly resetting to top.
+        if (this._pendingNavState) {
+            this.restoreScrollFocusWhenReady();
+        } else {
+            this._setupFocus();
+        }
 
         // Mark the page as rendered, fulfilling the Promise for NavigationState
         // to restore scroll/focus
@@ -863,7 +917,9 @@ class LibraryPage extends Page {
         if (this.params.searchTerm) parts.push(`search:${this.params.searchTerm}`);
         if (this.params.viewModeIndex !== undefined) parts.push(`vmIdx:${this.params.viewModeIndex}`);
         if (this.params.viewMode) parts.push(`vm:${this.params.viewMode}`);
-        if (this.params.char) parts.push(`char:${this.params.char}`);
+        // Fall back to state.nameStartsWith if route params have not been synced yet
+        const char = this.params.char || this.state?.nameStartsWith;
+        if (char) parts.push(`char:${char}`);
         if (this.params.page) parts.push(`page:${this.params.page}`);
         return parts.join(':');
     }
@@ -965,6 +1021,7 @@ class LibraryPage extends Page {
         this._gridScrollTop = null;
         this._pendingFocusEval = false;
         this._pendingScrollEval = false;
+        this._isRestoringFocus = false;
     }
 
     // ========================================================================
@@ -3056,8 +3113,8 @@ class LibraryPage extends Page {
             selector: 'button'
         });
 
-        // Ensure focus goes to first element in grid if subview
-        if (this._isSubView()) {
+        // Ensure focus goes to first element in grid if subview and NOT restoring focus
+        if (this._isSubView() && !this._pendingNavState && !state.has(this._getCacheKey())) {
             requestAnimationFrame(() => {
                 const currentFocus = document.activeElement;
                 if (!currentFocus || currentFocus === document.body) {
@@ -3353,6 +3410,11 @@ class LibraryPage extends Page {
 
         const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
         const focusedElement = this._gridFocusElement;
+
+        // Guard against grid window eviction and recalculation while focus restoration is in progress
+        if (this._isRestoringFocus) {
+            return;
+        }
 
         // ------------------------------------------------------------------
         // PRIORITY 1: Focus-based evaluation (D-pad navigation)
