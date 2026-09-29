@@ -378,6 +378,7 @@ export default class OSDController extends Component {
 
             this._player.on('chaptersloaded', () => this._updateChapterButtons());
             this._player.on('seek', (e) => this._onPlayerSeek(e));
+            this._player.on('seeked', (e) => this._onPlayerSeeked(e));
             // Also update markers when duration becomes available
             this._player.on('durationchange', () => this._renderChapterMarkers());
             this._player.on('loadedmetadata', () => this._renderChapterMarkers());
@@ -431,12 +432,19 @@ export default class OSDController extends Component {
 
         this.menus.forEach(menu => menu.hide?.());
 
+        if (this._seekResumeTimeout) {
+            clearTimeout(this._seekResumeTimeout);
+            this._seekResumeTimeout = null;
+        }
+        this._seekPendingResume = false;
+
         if (this._player) {
             this._player.removeAllListeners('mediastreamschange');
             this._player.removeAllListeners('play');
             this._player.removeAllListeners('pause');
             this._player.removeAllListeners('chaptersloaded');
             this._player.removeAllListeners('seek');
+            this._player.removeAllListeners('seeked');
             this._player.removeAllListeners('durationchange');
             this._player.removeAllListeners('loadedmetadata');
         }
@@ -1793,7 +1801,7 @@ export default class OSDController extends Component {
          *   - 'enter': Jumps to target and restores the initial playback state.
          * ========================================================================
          */
-        if (this.hasPendingSeekConfirmation() && isConfirmSeekKey && this._currentFocusRow === 2) {
+        if (this.hasPendingSeekConfirmation() && isConfirmSeekKey && (this._seekRequiresConfirmation || this._currentFocusRow === 2)) {
             return this.confirmPendingSeek(key, e);
         }
 
@@ -2643,13 +2651,15 @@ export default class OSDController extends Component {
                 break;
             case 'rewind': {
                 const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack;
-                this._performDebouncedSeek(-skipBackMs * 10000);
+                const requireConfirm = PlayerSettings.get('confirmSeekWithOK') === true;
+                this._performDebouncedSeek(-skipBackMs * 10000, requireConfirm);
                 this.resetAutoHide();
                 break;
             }
             case 'fastForward': {
                 const skipFwdMs = PlayerSettings.get('skipForwardLength') || this._config.seekStepForward;
-                this._performDebouncedSeek(skipFwdMs * 10000);
+                const requireConfirm = PlayerSettings.get('confirmSeekWithOK') === true;
+                this._performDebouncedSeek(skipFwdMs * 10000, requireConfirm);
                 this.resetAutoHide();
                 break;
             }
@@ -3413,10 +3423,48 @@ export default class OSDController extends Component {
     /*
      * Resumes playback after committing or exiting a timeline seek scrub session
      * if playback was active prior to scrubbing or requested by the confirm key.
+     *
+     * @param {boolean} resumePlayback - Whether to unpause playback
+     * @param {boolean} [force=false]  - Force immediate unpause, bypassing seeking gate
      */
-    _restoreSeekPlayback(resumePlayback) {
+    _restoreSeekPlayback(resumePlayback, force = false) {
+        // Exit early if playback should not resume or player instance is gone
         if (!resumePlayback || !this._player) return;
+
+        /*
+         * ====================================================================
+         * ACTIVE HARDWARE SEEK PLAYBACK RESUME GATE
+         * ====================================================================
+         * When a seek is committed (either via OK button confirmation or after
+         * the debounce timer elapses), the underlying player backend (AVPlay,
+         * WebOS, or HTML5 video) begins asynchronous demuxing and buffering
+         * to the target position.
+         *
+         * If unpause() is executed synchronously while that asynchronous seek
+         * is in flight, the player unpauses the existing audio/video pipeline
+         * at the PRE-SEEK position! This manifests as several seconds of audio
+         * and video playback from the old point before abruptly jumping to the
+         * seeked target.
+         *
+         * To eliminate this, if the player is actively seeking and force is not
+         * asserted, we defer unpausing until the authoritative 'seeked' event
+         * fires from the hardware demuxer.
+         * ====================================================================
+         */
+        const isSeeking = Boolean(
+            (typeof this._player.isSeeking === 'function' ? this._player.isSeeking() : this._player.isSeeking) ||
+            this._player._isSeeking
+        );
+        if (!force && isSeeking && typeof this._player.on === 'function') {
+            log.info('OSDController: Deferring playback resume until seeked event completes');
+            // Flag that playback resumption is waiting on the hardware seeked event
+            this._seekPendingResume = true;
+            this._armSeekResumeTimeout();
+            return;
+        }
+
         try {
+            // Attempt standard unpause first, falling back to play if required
             if (typeof this._player.unpause === 'function') {
                 this._player.unpause();
             } else if (typeof this._player.play === 'function') {
@@ -3425,7 +3473,41 @@ export default class OSDController extends Component {
         } catch (err) {
             log.error('Could not resume playback after timeline preview:', err);
         }
+        // Keep OSD play/pause button state in sync with actual playback state
         this.updatePlayPauseButton();
+    }
+
+    _armSeekResumeTimeout() {
+        // Clear any previous safety timer before arming a new one
+        if (this._seekResumeTimeout) {
+            clearTimeout(this._seekResumeTimeout);
+        }
+        // Arm 3.5s safety timeout: if hardware demuxer stalls or swallows seeked,
+        // force playback resumption so the player never stays frozen forever
+        this._seekResumeTimeout = setTimeout(() => {
+            this._seekResumeTimeout = null;
+            if (this._seekPendingResume) {
+                log.warn('OSDController: Seek resume timeout reached (3.5s) — forcing playback resume');
+                this._seekPendingResume = false;
+                this._restoreSeekPlayback(true, true);
+            }
+        }, 3500);
+    }
+
+    _onPlayerSeeked(e) {
+        // Disarm safety timeout as the authoritative hardware event has arrived
+        if (this._seekResumeTimeout) {
+            clearTimeout(this._seekResumeTimeout);
+            this._seekResumeTimeout = null;
+        }
+        // If playback was deferred awaiting this seek completion, resume now
+        if (this._seekPendingResume) {
+            log.info('OSDController: Received seeked event — restoring deferred playback');
+            this._seekPendingResume = false;
+            this._restoreSeekPlayback(true, true);
+        }
+        // Update OSD timeline, clock, and trickplay elements with post-seek state
+        this._updateState();
     }
 
     _clearSeekState(restorePlayback = true) {
@@ -3449,6 +3531,13 @@ export default class OSDController extends Component {
         const tooltip = this._osdEl?.querySelector('#osdSeekTooltip');
         if (tooltip) tooltip.classList.remove('visible');
         this._hideTrickplayThumb();
+
+        if (this._seekResumeTimeout) {
+            clearTimeout(this._seekResumeTimeout);
+            this._seekResumeTimeout = null;
+        }
+        this._seekPendingResume = false;
+
         if (restorePlayback) this._restoreSeekPlayback(resumePlayback);
     }
 

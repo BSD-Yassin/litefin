@@ -2027,9 +2027,9 @@ export class TizenAVPlayer {
         // Only exit early if we were neither logically playing nor natively playing in hardware
         if (!wasPlaying && !isNativelyPlaying) return; // Already considered paused — nothing to do
 
-        // Queue 'pause' as the post-seek operation if a seek is in flight,
+        // Queue 'pause' as the post-seek operation if a seek is in flight or deferred,
         // so the intended state is preserved after the seek completes.
-        if (this._seekInProgress) {
+        if (this._seekInProgress || this._deferredSeekTimerId !== null) {
             this._pendingOpAfterSeek = 'pause';
         }
 
@@ -2076,10 +2076,21 @@ export class TizenAVPlayer {
         // Cancel any deferred pause — we want to play now.
         this._pendingPause = false;
 
-        if (this._seekInProgress) {
+        /*
+         * ====================================================================
+         * ACTIVE / DEFERRED SEEK RESUME GATE
+         * ====================================================================
+         * If a native seek is actively executing in hardware or deferred by
+         * the subtitle track change cooldown timer, calling avplay.play()
+         * immediately would play audio and video frames at the pre-seek timestamp.
+         * Queue 'play' as the post-seek operation so playback resumes only after
+         * the demuxer lands on the post-seek keyframe.
+         * ====================================================================
+         */
+        if (this._seekInProgress || this._deferredSeekTimerId !== null) {
             this._pendingOpAfterSeek = 'play';
             this._isPlaying = true;
-            log.debug('unpause(): seek in progress — queued play for post-seek');
+            log.debug('unpause(): seek in progress or deferred — queued play for post-seek');
             return;
         }
 
@@ -2309,6 +2320,10 @@ export class TizenAVPlayer {
                 const remainingMs = SUBTITLE_TRACK_CHANGE_COOLDOWN_MS - timeSinceTrackChange;
                 log.debug(`seek(): subtitle track change cooldown active (${remainingMs}ms remaining) — deferring seek`);
 
+                // Mark seek in progress so any intermediate unpause() calls queue playback
+                // rather than resuming audio/video at the pre-seek position during cooldown.
+                this._seekInProgress = true;
+
                 // Cancel any previously deferred seek (user may have pressed seek multiple times)
                 if (this._deferredSeekTimerId !== null) {
                     clearTimeout(this._deferredSeekTimerId);
@@ -2323,6 +2338,8 @@ export class TizenAVPlayer {
                     if (pendingTicks !== null && this._avplay && this._isPrepared) {
                         log.info(`seek(): executing deferred seek to ${pendingTicks / 10000}ms after subtitle track change cooldown`);
                         this.seek(pendingTicks, options);
+                    } else {
+                        this._seekInProgress = false;
                     }
                 }, remainingMs + 50); // +50ms safety margin
                 return;
@@ -3202,6 +3219,14 @@ export class TizenAVPlayer {
         } catch (e) {
             return !this._isPlaying;
         }
+    }
+
+    /**
+     * Check if seeking is currently active or deferred
+     * @returns {boolean} True if seek operation or cooldown deferral is active
+     */
+    get isSeeking() {
+        return Boolean(this._seekInProgress || this._deferredSeekTimerId !== null);
     }
 
     // ========================================================================

@@ -481,6 +481,8 @@ export const PlayerEvent = {
     PLAY: 'play',
     PAUSE: 'pause',
     STOP: 'stop',
+    SEEK: 'seek',
+    SEEKED: 'seeked',
     TIME_UPDATE: 'timeupdate',
     VOLUME_CHANGE: 'volumechange',
     PLAYBACK_START: 'playbackstart',
@@ -704,11 +706,27 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
-     * Check if player is currently seeking
-     * @returns {boolean}
+     * Check if player or active hardware backend is currently seeking.
+     * Prevents race conditions where higher-level components or remote events
+     * attempt to resume playback before the hardware demuxer has settled.
+     * 
+     * @returns {boolean} True if seek operation is actively in flight
      */
     get isSeeking() {
-        return this._isSeeking;
+        /*
+         * Query both JellyfinPlayer's internal seek flag as well as the active
+         * hardware backend's native seeking property (e.g. video.seeking on HTML5,
+         * or _seekInProgress / deferred timers on Samsung AVPlay).
+         */
+        const backendSeeking = Boolean(
+            this._backend && (
+                typeof this._backend.isSeeking === 'function'
+                    ? this._backend.isSeeking()
+                    : this._backend.isSeeking
+            )
+        );
+
+        return Boolean(this._isSeeking || backendSeeking);
     }
 
     /**
@@ -750,6 +768,23 @@ export class JellyfinPlayer extends EventEmitter {
             if (clearTimer && this._seekFailsafeTimeout) {
                 clearTimer(this._seekFailsafeTimeout);
                 this._seekFailsafeTimeout = null;
+            }
+
+            /*
+             * ================================================================
+             * DEFERRED POST-SEEK UNPAUSE DISPATCH
+             * ================================================================
+             * If unpause() was requested while the hardware seek was in flight
+             * (e.g., from OSD debounced seek or remote Play button), playback
+             * was held paused to prevent playing audio/video at the pre-seek
+             * position. Now that the hardware seek has completed and landed on
+             * the target GOP keyframe, release and execute the pending unpause.
+             * ================================================================
+             */
+            if (this._pendingPlayAfterSeek) {
+                log.info('[JellyfinPlayer] Seek completed (seeked/playing) — executing queued post-seek unpause');
+                this._pendingPlayAfterSeek = false;
+                this.unpause();
             }
         }
 
@@ -2032,6 +2067,12 @@ export class JellyfinPlayer extends EventEmitter {
      * Pause playback
      */
     pause() {
+        /*
+         * Cancel any queued post-seek playback resume so that an explicit pause
+         * command issued during or immediately after a seek reliably halts playback.
+         */
+        this._pendingPlayAfterSeek = false;
+
         this._backend?.pause();
         // State update and event emission handled by _handleBackendEvent
     }
@@ -2040,6 +2081,30 @@ export class JellyfinPlayer extends EventEmitter {
      * Resume playback
      */
     unpause() {
+        /*
+         * ====================================================================
+         * ACTIVE SEEK RESUME GATE
+         * ====================================================================
+         * If the player or underlying hardware backend is currently seeking,
+         * calling unpause() immediately instructs the audio/video decoder to
+         * start playback at the PRE-SEEK position while the demuxer buffers the
+         * target frames. This causes 1-3 seconds of ghost playback at the old
+         * position before jumping to the seeked point.
+         *
+         * To eliminate this ghost playback, queue the unpause request and allow
+         * it to execute once the hardware fires the authoritative 'seeked' event.
+         * ====================================================================
+         */
+        if (this.isSeeking) {
+            log.info('[JellyfinPlayer] unpause() requested while seek in flight — queueing play for post-seek landing');
+            this._pendingPlayAfterSeek = true;
+            this._isPaused = false;
+            return;
+        }
+
+        // Cancel any stale queued play state now that we are executing
+        this._pendingPlayAfterSeek = false;
+
         // Immediately mark state as unpaused so togglePlay and UI stay in sync
         this._isPaused = false;
         this._subtitleManager?.play();

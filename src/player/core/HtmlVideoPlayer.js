@@ -744,9 +744,18 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Check if player is actively seeking
+     * @returns {boolean} True if HTML5 video is seeking
+     */
+    get isSeeking() {
+        return Boolean(this._videoElement?.seeking);
+    }
+
+    /**
      * Pause playback
      */
     pause() {
+        this._pendingPlayAfterSeek = false;
         this._videoElement?.pause();
     }
 
@@ -755,6 +764,24 @@ export class HtmlVideoPlayer {
      */
     unpause() {
         if (!this._videoElement) return;
+
+        /*
+         * ====================================================================
+         * ACTIVE SEEK PLAYBACK GUARD
+         * ====================================================================
+         * If the HTML5 media element is currently seeking (video.seeking === true),
+         * calling video.play() immediately unpauses playback of the stale pre-seek
+         * buffer while the demuxer is still fetching the target keyframe.
+         * Queue the play command to execute in _onSeeked once repositioning completes.
+         * ====================================================================
+         */
+        if (this._videoElement.seeking) {
+            log.debug('HtmlVideoPlayer: seek in progress — queueing play on seeked');
+            this._pendingPlayAfterSeek = true;
+            return;
+        }
+
+        this._pendingPlayAfterSeek = false;
         
         this._videoElement.play().catch((err) => {
             if (err.name === 'NotAllowedError') {
@@ -1658,6 +1685,14 @@ export class HtmlVideoPlayer {
         // Dispatch the official 'seeked' event so orchestrator clears seeking lock.
         // ---------------------------------------------------------------------
         this.onEvent({ type: 'seeked' });
+
+        /*
+         * Execute queued play command if unpause() was called while seek was in flight
+         */
+        if (this._pendingPlayAfterSeek) {
+            this._pendingPlayAfterSeek = false;
+            this.unpause();
+        }
 
         // ---------------------------------------------------------------------
         // Accurate Post-Seek Presentation Timestamp:

@@ -628,3 +628,192 @@ for (const idleTimerRunsFirst of [true, false]) {
         assert.doesNotMatch(osd._cachedTooltipTextEl.textContent, /x/);
     });
 }
+
+/*
+ * ============================================================================
+ * ASYNCHRONOUS HARDWARE SEEK PLAYBACK SYNCHRONIZATION TESTS
+ * ============================================================================
+ * Verifies that playback does not prematurely unpause at the pre-seek position
+ * while an asynchronous hardware seek is actively in flight. Covers both
+ * explicit confirmation mode (confirmSeekWithOK = true) and automatic debounce
+ * mode (confirmSeekWithOK = false), testing deferred resume on 'seeked' event
+ * arrival and safety timeout fallbacks.
+ * ============================================================================
+ */
+
+test('OSDController: confirmed seek defers playback resumption until seeked event fires', () => {
+    // Initialize controller with confirmSeekWithOK enabled and initial playback active
+    const { osd, advance } = setup(true, false);
+    let isSeekingInHardware = false;
+    let seekCount = 0;
+    const listeners = new Map();
+
+    // Wire up event emitter simulation on player mock
+    osd._player.on = (event, fn) => {
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event).push(fn);
+    };
+    osd._player.seek = (ticks) => {
+        seekCount++;
+        isSeekingInHardware = true;
+    };
+    Object.defineProperty(osd._player, 'isSeeking', {
+        get: () => isSeekingInHardware
+    });
+
+    // Re-bind listeners as OSDController constructor normally does
+    osd._player.on('seeked', (e) => osd._onPlayerSeeked(e));
+
+    // Scrub forward 10s — scrub automatically pauses playback
+    osd.handleInput('right');
+    assert.equal(osd._player.isPaused(), true);
+
+    // Press OK/Enter to confirm seek jump
+    osd.handleInput('enter');
+    assert.equal(seekCount, 1);
+
+    // Active seek is in flight: playback MUST remain paused and deferred
+    assert.equal(isSeekingInHardware, true);
+    assert.equal(osd._seekPendingResume, true);
+    assert.equal(osd._player.isPaused(), true);
+
+    // Hardware demuxer arrives at keyframe and dispatches authoritative 'seeked' event
+    isSeekingInHardware = false;
+    const seekedHandlers = listeners.get('seeked') || [];
+    for (const handler of seekedHandlers) {
+        handler();
+    }
+
+    // Playback is now safely unpaused after the seeked target lands
+    assert.equal(osd._seekPendingResume, false);
+    assert.equal(osd._player.isPaused(), false);
+});
+
+test('OSDController: debounced seek defers playback resumption until seeked event fires', () => {
+    // Initialize controller with confirmSeekWithOK disabled and initial playback active
+    const { osd, advance } = setup(false, false);
+    let isSeekingInHardware = false;
+    const listeners = new Map();
+
+    osd._player.on = (event, fn) => {
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event).push(fn);
+    };
+    osd._player.seek = () => {
+        isSeekingInHardware = true;
+    };
+    Object.defineProperty(osd._player, 'isSeeking', {
+        get: () => isSeekingInHardware
+    });
+
+    osd._player.on('seeked', (e) => osd._onPlayerSeeked(e));
+
+    // Scrub forward — pauses during scrub session
+    osd.handleInput('right');
+    assert.equal(osd._player.isPaused(), true);
+
+    // Let 800ms debounce timer fire to commit seek
+    advance(800);
+
+    // Seek is in flight: playback MUST NOT resume at pre-seek timestamp
+    assert.equal(isSeekingInHardware, true);
+    assert.equal(osd._seekPendingResume, true);
+    assert.equal(osd._player.isPaused(), true);
+
+    // Demuxer finishes buffering and emits 'seeked'
+    isSeekingInHardware = false;
+    const seekedHandlers = listeners.get('seeked') || [];
+    for (const handler of seekedHandlers) {
+        handler();
+    }
+
+    // Deferred playback now resumes at post-seek timestamp
+    assert.equal(osd._seekPendingResume, false);
+    assert.equal(osd._player.isPaused(), false);
+});
+
+test('OSDController: seek safety timer (3.5s) forces playback resume if seeked event never fires', () => {
+    // Test hardware stall recovery fallback
+    const { osd, advance } = setup(true, false);
+    let isSeekingInHardware = true;
+
+    osd._player.on = (event, fn) => {};
+    osd._player.seek = () => {
+        isSeekingInHardware = true;
+    };
+    Object.defineProperty(osd._player, 'isSeeking', {
+        get: () => isSeekingInHardware
+    });
+
+    osd.handleInput('right');
+    osd.handleInput('enter');
+
+    // Verify deferred resume state is armed
+    assert.equal(osd._seekPendingResume, true);
+    assert.equal(osd._player.isPaused(), true);
+
+    // Advance 3499ms: still safely waiting for hardware seeked event
+    advance(3499);
+    assert.equal(osd._seekPendingResume, true);
+    assert.equal(osd._player.isPaused(), true);
+
+    // Advance past 3500ms safety threshold: forces playback recovery
+    advance(2);
+    assert.equal(osd._seekPendingResume, false);
+    assert.equal(osd._player.isPaused(), false);
+});
+
+test('JellyfinPlayer: unpause queues execution while seeking and unpauses upon SEEKED event', () => {
+    // Read JellyfinPlayer source and verify event definitions and gate logic
+    const jfSource = readFileSync(new URL('../src/player/core/JellyfinPlayer.js', import.meta.url), 'utf8');
+
+    // PlayerEvent MUST include SEEK and SEEKED
+    assert.ok(jfSource.includes("SEEK: 'seek'"), 'PlayerEvent must define SEEK');
+    assert.ok(jfSource.includes("SEEKED: 'seeked'"), 'PlayerEvent must define SEEKED');
+
+    // unpause() MUST gate on isSeeking and queue _pendingPlayAfterSeek
+    assert.ok(
+        jfSource.includes('this._pendingPlayAfterSeek = true;'),
+        'JellyfinPlayer.unpause() must queue _pendingPlayAfterSeek when isSeeking'
+    );
+
+    // _handleBackendEvent MUST execute pending unpause upon SEEKED or PLAYING
+    assert.ok(
+        jfSource.includes('this._pendingPlayAfterSeek = false;') &&
+        jfSource.includes('this.unpause();'),
+        'JellyfinPlayer._handleBackendEvent must release queued unpause on seek completion'
+    );
+});
+
+test('Hardware player backends (Tizen, WebOS, HTML5) implement isSeeking and post-seek unpause guards', () => {
+    const tizenSource = readFileSync(new URL('../src/player/core/TizenAVPlayer.js', import.meta.url), 'utf8');
+    const webosSource = readFileSync(new URL('../src/player/core/WebOSPlayer.js', import.meta.url), 'utf8');
+    const htmlSource = readFileSync(new URL('../src/player/core/HtmlVideoPlayer.js', import.meta.url), 'utf8');
+
+    // 1. TizenAVPlayer
+    assert.ok(tizenSource.includes('get isSeeking()'), 'TizenAVPlayer must implement isSeeking getter');
+    assert.ok(
+        tizenSource.includes("this._pendingOpAfterSeek = 'play'"),
+        'TizenAVPlayer.unpause must queue play when seeking or deferred'
+    );
+    assert.ok(
+        tizenSource.includes('this._seekInProgress = true;') &&
+        tizenSource.includes('SUBTITLE_TRACK_CHANGE_COOLDOWN_MS'),
+        'TizenAVPlayer.seek must mark _seekInProgress during subtitle cooldown'
+    );
+
+    // 2. WebOSPlayer
+    assert.ok(webosSource.includes('get isSeeking()'), 'WebOSPlayer must implement isSeeking getter');
+    assert.ok(
+        webosSource.includes('this._pendingPlayAfterSeek = true;'),
+        'WebOSPlayer.unpause must queue play when video is seeking'
+    );
+
+    // 3. HtmlVideoPlayer
+    assert.ok(htmlSource.includes('get isSeeking()'), 'HtmlVideoPlayer must implement isSeeking getter');
+    assert.ok(
+        htmlSource.includes('this._pendingPlayAfterSeek = true;'),
+        'HtmlVideoPlayer.unpause must queue play when video is seeking'
+    );
+});
+

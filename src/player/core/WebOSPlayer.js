@@ -1147,7 +1147,17 @@ export class WebOSPlayer {
      * Pause playback.
      */
     pause() {
+        // Disarm any queued post-seek unpause operations so an explicit pause halts playback
+        this._pendingPlayAfterSeek = false;
         this._videoElement?.pause();
+    }
+
+    /**
+     * Check if player is actively seeking
+     * @returns {boolean} True if WebOS HTML5 video is seeking
+     */
+    get isSeeking() {
+        return Boolean(this._videoElement?.seeking);
     }
 
     /**
@@ -1155,6 +1165,26 @@ export class WebOSPlayer {
      */
     unpause() {
         if (!this._videoElement) return;
+
+        /*
+         * ====================================================================
+         * ACTIVE SEEK PLAYBACK GUARD
+         * ====================================================================
+         * If the HTML5 media element is currently seeking (video.seeking === true),
+         * calling video.play() immediately unpauses playback of the stale pre-seek
+         * buffer while the demuxer is still fetching the target keyframe.
+         * Queue the play command to execute in _onSeeked once repositioning completes.
+         * ====================================================================
+         */
+        if (this._videoElement.seeking) {
+            log.debug('WebOSPlayer: seek in progress — queueing play on seeked');
+            this._pendingPlayAfterSeek = true;
+            return;
+        }
+
+        // Seek is not in flight — clear queued play flag
+        this._pendingPlayAfterSeek = false;
+
         this._videoElement.play().catch(err => {
             if (err.name === 'NotAllowedError') {
                 log.warn('WebOSPlayer: unpause blocked — retrying muted');
@@ -1173,6 +1203,7 @@ export class WebOSPlayer {
      * @returns {Promise<void>}
      */
     async stop() {
+        this._pendingPlayAfterSeek = false;
         this._cancelRobustResume = true;
         this._robustSeekTarget   = null;
         this._robustSeekPending  = false;
@@ -2212,6 +2243,20 @@ export class WebOSPlayer {
         // Dispatch the official 'seeked' event so orchestrator clears seeking lock.
         // ---------------------------------------------------------------------
         this.onEvent({ type: 'seeked' });
+
+        /*
+         * ====================================================================
+         * DEFERRED POST-SEEK PLAY DISPATCH
+         * ====================================================================
+         * If unpause() was requested while the native seek was actively in flight,
+         * execute the deferred playback resumption now that the hardware demuxer
+         * has firmly established its position on the target GOP keyframe.
+         * ====================================================================
+         */
+        if (this._pendingPlayAfterSeek) {
+            this._pendingPlayAfterSeek = false;
+            this.unpause();
+        }
 
         // ---------------------------------------------------------------------
         // Accurate Post-Seek Presentation Timestamp:
