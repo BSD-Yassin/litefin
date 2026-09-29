@@ -1516,7 +1516,8 @@ class SettingsPage extends Page {
             'osd-layout-select',
             [
                 { value: 'left', label: i18n.t('OsdLayoutLeft') || 'Left Aligned (Default)' },
-                { value: 'centered', label: i18n.t('OsdLayoutCentered') || 'Centered' }
+                { value: 'centered', label: i18n.t('OsdLayoutCentered') || 'Centered' },
+                { value: 'hidden', label: i18n.t('OsdLayoutHidden') || 'Stealth / Anti-Spoiler (Hold Down to Reveal)' }
             ],
             PlayerSettings.get('osdLayout') || 'left'
         )}
@@ -3611,6 +3612,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdColorButtonsReveal">${i18n.t('OsdColorButtonsReveal') || 'Colored Buttons Reveal OSD'}</span>
+                        <span class="setting-description" data-i18n="OsdColorButtonsRevealDescription">${i18n.t('OsdColorButtonsRevealDescription') || 'Allow pressing colored remote buttons (Red, Green, Yellow, Blue) to instantly reveal controls in stealth mode instead of holding Down.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdColorButtonsReveal') !== false ? 'active' : ''}"
+                                id="toggle-osd-color-buttons-reveal"
+                                data-setting="osdColorButtonsReveal"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="KeepFocusOnSubtitleOffset">${i18n.t('KeepFocusOnSubtitleOffset') || 'Pin Subtitle Offset'}</span>
                         <span class="setting-description" data-i18n="KeepFocusOnSubtitleOffsetDescription">${i18n.t('KeepFocusOnSubtitleOffsetDescription') || 'Prevent the player controls from auto-hiding while the subtitle offset menu is open.'}</span>
                     </div>
@@ -5447,6 +5462,10 @@ class SettingsPage extends Page {
             {
                 value: 'playerPlaybackInfo',
                 label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info'
+            },
+            {
+                value: 'playerShowOsd',
+                label: i18n.t('OptionPlayerShowOsd') || 'Player: Reveal Controls / OSD'
             },
             /*
              * ========================================================================
@@ -8138,6 +8157,17 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Colored Buttons Reveal OSD in Stealth Mode
+        const colorButtonsRevealBtn = this.$('#toggle-osd-color-buttons-reveal');
+        if (colorButtonsRevealBtn) {
+            colorButtonsRevealBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdColorButtonsReveal') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('osdColorButtonsReveal', newValue);
+                colorButtonsRevealBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Keep Focus On Subtitle Offset
         const keepFocusOffsetBtn = this.$('#toggle-keep-focus-subtitle-offset');
         if (keepFocusOffsetBtn) {
@@ -10056,7 +10086,7 @@ class SettingsPage extends Page {
                             /* -------------------------------------------------------------
                              * Dynamic Sub-Setting Visibility for Library Page Size
                              * When 'unlimited' is selected, reveal the alphabet scroll mode toggle;
-                             * otherwise, hide it to maintain a clean Apple HIG layout.
+                             * otherwise, hide it to maintain a clean minimal layout.
                              * ------------------------------------------------------------- */
                             if (settingConfig.key === 'pref:libraryPageSize') {
                                 const alphaScrollItem = this.$('#alpha-picker-scroll-mode-item');

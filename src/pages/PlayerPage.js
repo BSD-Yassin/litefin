@@ -261,6 +261,10 @@ class PlayerPage extends Page {
         // Hide global clock during player loading/playback
         globalClock.setVisibility(false);
 
+        // Suspend FocusManager while the player is active so that OSDController
+        // manages all D-pad and media key input exclusively without background fighting
+        focusManager.suspend();
+
         const itemId = this.params.id;
         const resume = this.params.resume === 'true';
         const startPositionTicks = this.params.startPositionTicks ? parseInt(this.params.startPositionTicks, 10) : null;
@@ -478,10 +482,14 @@ class PlayerPage extends Page {
                     // Report pause state to server
                     this._reportPlaybackProgress('pause');
 
-                    // Show OSD for feedback
+                    // Show OSD for feedback (or transient HUD in stealth layout)
                     if (this._osd) {
-                        this._osd.showAndFocusPlayPause();
-                        this._osd.updatePlayPauseButton();
+                        if (PlayerSettings.get('osdLayout') === 'hidden' && !this._osd.isOsdVisible) {
+                            this._osd.showStealthHud('pause');
+                        } else {
+                            this._osd.showAndFocusPlayPause();
+                            this._osd.updatePlayPauseButton();
+                        }
                     }
                 }
             };
@@ -508,10 +516,14 @@ class PlayerPage extends Page {
                 // Report unpause state to server
                 this._reportPlaybackProgress('unpause');
 
-                // Show OSD for feedback
+                // Show OSD for feedback (or transient HUD in stealth layout)
                 if (this._osd) {
-                    this._osd.showAndFocusPlayPause();
-                    this._osd.updatePlayPauseButton();
+                    if (PlayerSettings.get('osdLayout') === 'hidden' && !this._osd.isOsdVisible) {
+                        this._osd.showStealthHud('play');
+                    } else {
+                        this._osd.showAndFocusPlayPause();
+                        this._osd.updatePlayPauseButton();
+                    }
                 }
             };
             eventBus.on('remote:play', lockCheck(this._onRemotePlay));
@@ -538,10 +550,14 @@ class PlayerPage extends Page {
                     this._reportPlaybackProgress('pause');
                 }
 
-                // Show OSD for feedback
+                // Show OSD for feedback (or transient HUD in stealth layout)
                 if (this._osd) {
-                    this._osd.showAndFocusPlayPause();
-                    this._osd.updatePlayPauseButton();
+                    if (PlayerSettings.get('osdLayout') === 'hidden' && !this._osd.isOsdVisible) {
+                        this._osd.showStealthHud(wasPaused ? 'play' : 'pause');
+                    } else {
+                        this._osd.showAndFocusPlayPause();
+                        this._osd.updatePlayPauseButton();
+                    }
                 }
             };
             eventBus.on('remote:playpause', lockCheck(this._onRemotePlayPause));

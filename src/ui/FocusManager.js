@@ -526,6 +526,18 @@ class FocusManager {
     } // Alias if needed? No, getActiveSection exists.
 
     /**
+     * Get the timestamp of the most recent directional move or user navigation.
+     * Used by NavigationState and active page controllers to detect if the user
+     * has already begun navigating manually during asynchronous page loading,
+     * preventing deferred focus restoration from hijacking active cursor position.
+     * @returns {number} Timestamp in milliseconds
+     */
+    getLastMoveTime() {
+        // Returns the epoch timestamp of the latest D-pad interaction
+        return this._lastMoveTime;
+    }
+
+    /**
      * Get config for a section
      * @param {string} name
      */

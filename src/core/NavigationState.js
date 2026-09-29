@@ -169,6 +169,25 @@ class NavigationState {
             return;
         }
 
+        // ====================================================================
+        // ACTIVE INTERACTION GUARD
+        // ====================================================================
+        // If the user has already actively navigated via D-pad after entering
+        // this page (e.g. while async items were loading over the network),
+        // abort deferred scroll and focus restoration! Overriding manual user
+        // navigation with stale history/cache targets causes focus to jarringly
+        // snap back to previous items after ~1 second of browsing.
+        // ====================================================================
+        if (
+            pageInstance &&
+            pageInstance._initTimestamp &&
+            typeof focusManager.getLastMoveTime === 'function' &&
+            focusManager.getLastMoveTime() > pageInstance._initTimestamp
+        ) {
+            log.info('Skipping deferred NavigationState restoration: user actively navigated');
+            return;
+        }
+
         if (this._debug) {
             log.debug('Executing scroll/focus restoration');
         }

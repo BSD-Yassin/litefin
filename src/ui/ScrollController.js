@@ -403,9 +403,10 @@ class ScrollController {
                     }
                 } else if (scrollMode === 'gpu' && track) {
                     // Update transform coordinates on GPU compositor track.
-                    track.style.transform = `translate3d(0px, -0px, 0px)`;
-                    track.style.webkitTransform = `translate3d(0px, -0px, 0px)`;
-                    container.scrollTop = targetScroll;
+                    // Snap compositor track directly to target scroll offset without visual jumps.
+                    track.style.transform = `translate3d(0px, -${targetScroll}px, 0px)`;
+                    track.style.webkitTransform = `translate3d(0px, -${targetScroll}px, 0px)`;
+                    container.scrollTop = 0;
                 } else {
                     container.scrollTop = targetScroll;
                 }

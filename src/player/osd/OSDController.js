@@ -105,6 +105,27 @@ export default class OSDController extends Component {
         this._cachedSeekbar = null;
 
         /*
+         * ====================================================================
+         * STEALTH / ANTI-SPOILER OSD STATE
+         * ====================================================================
+         * Manages state for the minimalist spoiler-free playback mode:
+         * - _isHoldingDown: whether the Down button is currently held down.
+         * - _downHoldTimer: 4-second timeout to reveal Layer 1 controls.
+         * - _downHoldWatchdog: autorepeat idle watchdog for TV hardware.
+         * - _stealthHudTimeout: auto-dismiss timer for the transient HUD.
+         * ====================================================================
+         */
+        this._isHoldingDown = false;
+        this._downHoldTimer = null;
+        this._downHoldWatchdog = null;
+        this._stealthHudTimeout = null;
+        this._osdStealthHudEl = null;
+        this._osdStealthIconEl = null;
+        this._osdStealthTextEl = null;
+        this._osdHoldIndicatorEl = null;
+        this._osdHoldRingProgressEl = null;
+
+        /*
          * Up Next dialog state.
          * _upNextShown: true once the dialog has been triggered for the current
          *   item — prevents re-triggering on every tick while still visible.
@@ -414,6 +435,17 @@ export default class OSDController extends Component {
     onBeforeDestroy() {
         this._clearSeekState(false);
         document.removeEventListener('keyup', this._onSeekKeyUp, true);
+
+        // Cancel any pending 2-second stealth hold or active transient HUD
+        this._cancelDownHold();
+        if (this._stealthHudTimeout) {
+            clearTimeout(this._stealthHudTimeout);
+            this._stealthHudTimeout = null;
+        }
+        if (this._onStealthKeyUp) {
+            document.removeEventListener('keyup', this._onStealthKeyUp, true);
+        }
+
         this._stopUpdates();
         if (this._updateTimer) clearInterval(this._updateTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
@@ -548,6 +580,23 @@ export default class OSDController extends Component {
                 </div>
             </div>
             <div class="osd-overlays"></div>
+
+            <!-- Transient Action HUD (Spoiler-Free, No Shadow, Frosted Glass) -->
+            <div class="osd-stealth-hud hidden" id="osdStealthHud">
+                <div class="osd-stealth-hud-pill">
+                    <div class="osd-stealth-icon-wrap" id="osdStealthIcon"></div>
+                    <span class="osd-stealth-text hidden" id="osdStealthText"></span>
+                </div>
+            </div>
+
+            <!-- 2-Second Hold Down Gesture Indicator -->
+            <div class="osd-hold-indicator hidden" id="osdHoldIndicator">
+                <svg class="osd-hold-ring" viewBox="0 0 36 36">
+                    <circle class="osd-hold-ring-bg" cx="18" cy="18" r="15.5"></circle>
+                    <circle class="osd-hold-ring-progress" id="osdHoldRingProgress" cx="18" cy="18" r="15.5"></circle>
+                </svg>
+                <span class="osd-hold-label" id="osdHoldLabel">${i18n.t('OsdHoldToReveal') || 'Hold Down to reveal controls'}</span>
+            </div>
         `;
 
         // Cache main elements to avoid redundant querySelector calls in the update loop
@@ -561,6 +610,13 @@ export default class OSDController extends Component {
         this._osdEndsAtEl = this._osdEl.querySelector('#osdEndsAt');
         this._osdClockEl = this._osdEl.querySelector('#osdClock');
         this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
+
+        /* Cache stealth HUD and hold gesture elements */
+        this._osdStealthHudEl = this._osdEl.querySelector('#osdStealthHud');
+        this._osdStealthIconEl = this._osdEl.querySelector('#osdStealthIcon');
+        this._osdStealthTextEl = this._osdEl.querySelector('#osdStealthText');
+        this._osdHoldIndicatorEl = this._osdEl.querySelector('#osdHoldIndicator');
+        this._osdHoldRingProgressEl = this._osdEl.querySelector('#osdHoldRingProgress');
 
         /* Cache trickplay tooltip sub-elements to avoid repeated queries during seek */
         this._cachedThumbEl = this._osdEl.querySelector('#osdTrickplayThumb');
@@ -788,6 +844,13 @@ export default class OSDController extends Component {
                 if (queueBtn) rightControls.insertBefore(queueBtn, rightControls.firstChild);
                 if (chaptersBtn) rightControls.insertBefore(chaptersBtn, rightControls.firstChild);
             }
+        } else if (PlayerSettings.get('osdLayout') === 'hidden') {
+            /*
+             * Stealth / Anti-Spoiler layout:
+             * Attaches the layout class to suppress Layer 1 presentation
+             * while keeping Layer 2 overlays (Skip buttons, Dialogs) visible.
+             */
+            this._osdEl.classList.add('osd-layout-hidden');
         }
 
         if (PlayerSettings.get('osdHideFavorite') === true) {
@@ -862,6 +925,14 @@ export default class OSDController extends Component {
     }
 
     _onMouseMove(e) {
+        /*
+         * In stealth mode, cursor movement does NOT resurrect Layer 1.
+         * Only explicit manual 4-second hold down is permitted to reveal controls.
+         */
+        if (PlayerSettings.get('osdLayout') === 'hidden' && !this._isOsdVisible) {
+            return;
+        }
+
         this.show();
         this.resetAutoHide();
 
@@ -962,6 +1033,167 @@ export default class OSDController extends Component {
             this._osdBottomEl.classList.remove('magic-hover');
         }
         this._lastHoveredEl = null;
+    }
+
+    get isOsdVisible() {
+        return this._isOsdVisible;
+    }
+
+    /**
+     * ========================================================================
+     * STEALTH TRANSIENT ACTION HUD
+     * ========================================================================
+     * Displays a brief, high-aesthetic floating pill in the center of the screen
+     * indicating Play, Pause, Rewind 10s, or Forward 10s.
+     *
+     * Design principles:
+     * - ZERO Drop Shadows (box-shadow: none, filter: none)
+     * - Pure frosted glass (backdrop-filter: blur)
+     * - Smooth spring micro-animations (scale 0.82 -> 1.0)
+     * - 100% Anti-Spoiler: omits all timestamps, scrubbing lines, and metadata
+     * ========================================================================
+     * @param {'pause'|'play'|'unpause'|'seekBack'|'rewind'|'seekForward'|'fastForward'} action 
+     * @param {number|string} [param=''] Optional second count (e.g. 10)
+     */
+    showStealthHud(action, param = '') {
+        if (!this._osdStealthHudEl || !this._osdStealthIconEl) return;
+
+        // Clear any pending dismissal timer
+        if (this._stealthHudTimeout) {
+            clearTimeout(this._stealthHudTimeout);
+            this._stealthHudTimeout = null;
+        }
+
+        let iconHtml = '';
+        let text = '';
+
+        switch (action) {
+            case 'pause':
+                iconHtml = osdIcons.pause;
+                text = '';
+                break;
+            case 'play':
+            case 'unpause':
+                iconHtml = osdIcons.play;
+                text = '';
+                break;
+            case 'seekBack':
+            case 'rewind':
+                iconHtml = osdIcons.replay10 || osdIcons.fastRewind;
+                text = param ? `-${param}s` : '-10s';
+                break;
+            case 'seekForward':
+            case 'fastForward':
+                iconHtml = osdIcons.forward10 || osdIcons.fastForward;
+                text = param ? `+${param}s` : '+10s';
+                break;
+            default:
+                return;
+        }
+
+        this._osdStealthIconEl.innerHTML = iconHtml;
+        if (text && this._osdStealthTextEl) {
+            this._osdStealthTextEl.textContent = text;
+            this._osdStealthTextEl.classList.remove('hidden');
+        } else if (this._osdStealthTextEl) {
+            this._osdStealthTextEl.textContent = '';
+            this._osdStealthTextEl.classList.add('hidden');
+        }
+
+        // Present with smooth spring easing
+        this._osdStealthHudEl.classList.remove('hidden');
+
+        // Auto-dismiss after 1100ms
+        this._stealthHudTimeout = setTimeout(() => {
+            if (this._osdStealthHudEl) {
+                this._osdStealthHudEl.classList.add('hidden');
+            }
+            this._stealthHudTimeout = null;
+        }, 1100);
+    }
+
+    /**
+     * ========================================================================
+     * STEALTH 2-SECOND HOLD GESTURE HANDLER
+     * ========================================================================
+     * Handles continuous holding of the Down navigation button when Layer 1
+     * is hidden. After 2 continuous seconds of hold, Layer 1 (controls & seekbar)
+     * is unlocked and revealed to the user.
+     * ========================================================================
+     */
+    _handleDownHold() {
+        if (!this._isHoldingDown) {
+            this._isHoldingDown = true;
+
+            // Mount and animate hold indicator
+            if (this._osdHoldIndicatorEl) {
+                this._osdHoldIndicatorEl.classList.remove('hidden');
+                // Force layout reflow before adding .active to ensure SVG stroke transition triggers
+                void this._osdHoldIndicatorEl.offsetWidth;
+                this._osdHoldIndicatorEl.classList.add('active');
+            }
+
+            // Set 2-second hold completion timer
+            this._downHoldTimer = setTimeout(() => {
+                this._onHoldDownComplete();
+            }, 2000);
+
+            // Start idle watchdog timer to detect key release on TVs lacking keyup
+            this._resetDownHoldWatchdog();
+        } else {
+            // Consecutive keydown autorepeat tick from TV remote
+            this._resetDownHoldWatchdog();
+        }
+    }
+
+    /**
+     * Resets the watchdog timer that catches key release on remote
+     * hardware that fails to send reliable keyup events.
+     * Hardware typematic repeat delays range between 250ms and 600ms,
+     * so 1000ms guarantees we never falsely cancel and restart mid-hold.
+     * Key release is already caught instantly (0ms) by keyup listeners.
+     */
+    _resetDownHoldWatchdog() {
+        if (this._downHoldWatchdog) {
+            clearTimeout(this._downHoldWatchdog);
+        }
+        // 1000ms window safely covers typematic repeat delays on all TV remotes and keyboards
+        this._downHoldWatchdog = setTimeout(() => {
+            this._cancelDownHold();
+        }, 1000);
+    }
+
+    /**
+     * Cancels any pending hold down session and smoothly hides the indicator.
+     */
+    _cancelDownHold() {
+        if (!this._isHoldingDown) return;
+        this._isHoldingDown = false;
+
+        if (this._downHoldTimer) {
+            clearTimeout(this._downHoldTimer);
+            this._downHoldTimer = null;
+        }
+        if (this._downHoldWatchdog) {
+            clearTimeout(this._downHoldWatchdog);
+            this._downHoldWatchdog = null;
+        }
+
+        if (this._osdHoldIndicatorEl) {
+            this._osdHoldIndicatorEl.classList.remove('active');
+            this._osdHoldIndicatorEl.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Called when the 2-second hold successfully finishes.
+     * Unlocks Layer 1 (OSD header, controls, seekbar) and parks focus on Play/Pause.
+     */
+    _onHoldDownComplete() {
+        log.info('OSDController: 2-second hold completed, revealing Layer 1');
+        this._cancelDownHold();
+        this.show();
+        this.showAndFocusPlayPause();
     }
 
     // ===================================
@@ -1332,6 +1564,7 @@ export default class OSDController extends Component {
 
     hide() {
         this._clearSeekState();
+        this._cancelDownHold();
         // Don't hide if a modal menu is open
         if (this.isModalOpen) return;
 
@@ -1694,6 +1927,38 @@ export default class OSDController extends Component {
             }
         };
         document.addEventListener('keyup', this._onSeekKeyUp, true);
+
+        // Cancel 2-second hold down on key release
+        this._onStealthKeyUp = (e) => {
+            if (e.key === 'ArrowDown' || e.keyCode === 40) {
+                this._cancelDownHold();
+            }
+        };
+        document.addEventListener('keyup', this._onStealthKeyUp, true);
+
+        // COLOR BUTTONS (Red, Green, Yellow, Blue)
+        // Instantly reveal player controls in stealth mode without holding Down.
+        const handleColorButtonReveal = (color, e) => {
+            if (PlayerSettings.get('osdColorButtonsReveal') !== false &&
+                PlayerSettings.get('osdLayout') === 'hidden' &&
+                !this._isOsdVisible) {
+                log.info(`OSDController: Color button (${color}) pressed in stealth mode, revealing Layer 1`);
+                this._cancelDownHold();
+                this.show();
+                this.showAndFocusPlayPause();
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                return true;
+            }
+            return false;
+        };
+
+        this.on('key:red', (e) => handleColorButtonReveal('red', e));
+        this.on('key:green', (e) => handleColorButtonReveal('green', e));
+        this.on('key:yellow', (e) => handleColorButtonReveal('yellow', e));
+        this.on('key:blue', (e) => handleColorButtonReveal('blue', e));
         // ENTER
         this.on('key:enter', (e) => {
             // Conditionally prevent default inside handleInput based on what is focused
@@ -1825,6 +2090,44 @@ export default class OSDController extends Component {
 
         // Show OSD on Enter press if hidden (Directional keys fall through to _navigate)
         if (wasHidden && key === 'enter') {
+            /*
+             * ========================================================================
+             * STEALTH LAYOUT ENTER / OK INTERCEPTION
+             * ========================================================================
+             * In stealth mode, actions must not reveal Layer 1.
+             * If an overlay widget (Row -1: Skip Intro, Skip Outro, Up Next dialog)
+             * is visible and claimed focus, Enter immediately executes its action.
+             * Otherwise, Enter cleanly toggles play/pause with the transient HUD
+             * without exposing the timeline, controls, or metadata.
+             * ========================================================================
+             */
+            if (PlayerSettings.get('osdLayout') === 'hidden') {
+                if (this._currentFocusRow === -1) {
+                    const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                    if (focusedEl && focusedEl.isConnected && (
+                        focusedEl.closest('.plugin-widget.visible') ||
+                        focusedEl.closest('.upnext-dialog.visible') ||
+                        focusedEl.closest('.osd-offset-popup.visible') ||
+                        focusedEl.closest('.playback-info-popup.visible')
+                    )) {
+                        focusedEl.click();
+                        return true;
+                    }
+                }
+
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+
+                const wasPaused = this._player?.isPaused?.();
+                if (this._player?.togglePlay) {
+                    this._player.togglePlay();
+                }
+                this.showStealthHud(wasPaused ? 'play' : 'pause');
+                return true;
+            }
+
             /*
              * ========================================================================
              * GHOST KEY LOCKOUT GUARD:
@@ -2095,9 +2398,40 @@ export default class OSDController extends Component {
         const wasHidden = !this._isOsdVisible;
         const seekWithArrows = PlayerSettings.get('seekWithArrows') !== false;
 
-        // First D-pad press always reveals OSD if hidden
+        // First D-pad press always reveals OSD if hidden (except in stealth mode)
         // User requested single-press move: trigger show AND allow navigation to proceed.
         if (wasHidden) {
+            /*
+             * ====================================================================
+             * STEALTH / ANTI-SPOILER NAVIGATION INTERCEPTION
+             * ====================================================================
+             * In stealth mode, actions must not reveal Layer 1.
+             * - Left / Right: seeks 10s directly and displays transient HUD.
+             * - Down: starts / maintains 2-second hold tracking.
+             * - Up: suppressed while hidden so Layer 1 stays invisible.
+             * ====================================================================
+             */
+            if (PlayerSettings.get('osdLayout') === 'hidden') {
+                if (direction === 'left' || direction === 'right') {
+                    const stepSeconds = (PlayerSettings.get(direction === 'left' ? 'skipBackLength' : 'skipForwardLength') || 10000) / 1000;
+                    const offsetTicks = (stepSeconds * 10000000) * (direction === 'left' ? -1 : 1);
+                    const currentPos = (this._player.getCurrentPositionTicks && this._player.getCurrentPositionTicks()) || 0;
+                    const targetPos = Math.max(0, currentPos + offsetTicks);
+                    if (this._player?.seek) {
+                        this._player.seek(targetPos);
+                    }
+                    this.showStealthHud(direction === 'left' ? 'seekBack' : 'seekForward', stepSeconds);
+                    return true;
+                }
+                if (direction === 'down') {
+                    this._handleDownHold();
+                    return true;
+                }
+                if (direction === 'up') {
+                    return true;
+                }
+            }
+
             this.show();
 
             /*

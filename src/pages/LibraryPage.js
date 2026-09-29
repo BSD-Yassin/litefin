@@ -2055,8 +2055,10 @@ class LibraryPage extends Page {
             this._updateHeaderVisibility();
 
             // Force Focus Check - Ensure we don't drop focus after load
-            // Especially for BoxSets where tabs are hidden and initial focus might be lost
-            if (!document.activeElement || document.activeElement === document.body) {
+            // Especially for BoxSets where tabs are hidden and initial focus might be lost.
+            // Check focusManager.getFocused() as native focus is disabled across the app.
+            const currentFocused = focusManager.getFocused();
+            if (!currentFocused || !document.contains(currentFocused)) {
                 const collectionType = this.state.libraryInfo?.CollectionType;
                 if (collectionType === 'boxsets' || collectionType === 'playlists') {
                     // Force controls or grid
@@ -2064,11 +2066,6 @@ class LibraryPage extends Page {
                         this.setActiveSection('library-controls');
                     } else {
                         this.setActiveSection('library-grid');
-                    }
-                } else {
-                    // Try to restore valid focus or default
-                    if (this.$('#library-tabs')?.style.display !== 'none') {
-                        // Don't force tabs if we are deep in pagination, but on loadItems usually tabs or grid
                     }
                 }
             }
@@ -3113,11 +3110,15 @@ class LibraryPage extends Page {
             selector: 'button'
         });
 
-        // Ensure focus goes to first element in grid if subview and NOT restoring focus
+        // Ensure focus goes to first element in grid if subview and NOT restoring focus and user hasn't moved
         if (this._isSubView() && !this._pendingNavState && !state.has(this._getCacheKey())) {
             requestAnimationFrame(() => {
-                const currentFocus = document.activeElement;
-                if (!currentFocus || currentFocus === document.body) {
+                // If user already moved focus via D-pad while loading, do not override their cursor
+                if (this._initTimestamp && focusManager.getLastMoveTime() > this._initTimestamp) {
+                    return;
+                }
+                const currentFocus = focusManager.getFocused();
+                if (!currentFocus || !document.contains(currentFocus)) {
                     const firstItem = grid.querySelector('.media-card');
                     if (firstItem) {
                         focusManager.setActiveSection('library-grid', false);

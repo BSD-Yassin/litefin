@@ -651,8 +651,18 @@ const DEFAULTS = {
     // Position of playback control buttons relative to seek bar ('above', 'below')
     osdButtonsLocation: 'above',
 
-    // Layout configuration of player OSD buttons ('left', 'centered')
+    // Layout configuration of player OSD buttons ('left', 'centered', 'hidden')
     osdLayout: 'left',
+
+    /*
+     * Instantly Reveal OSD on Color Buttons in Stealth Mode
+     * -------------------------------------------------------------------------
+     * When stealth / anti-spoiler layout is active (osdLayout: 'hidden'),
+     * pressing any colored remote button (Red, Green, Yellow, Blue) instantly
+     * reveals the playback controls and seeks focus to Play/Pause, providing
+     * an instant zero-delay alternative to the 2-second hold gesture.
+     */
+    osdColorButtonsReveal: true,
 
     // Toggle states for showing/hiding specific player buttons
     osdHideFavorite: true,

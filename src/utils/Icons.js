@@ -284,6 +284,14 @@ const iconStyles = {
                 outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="m12 13.333l-9.223 6.149A.5.5 0 0 1 2 19.066V4.934a.5.5 0 0 1 .777-.416L12 10.667V4.934a.5.5 0 0 1 .777-.416l10.599 7.066a.5.5 0 0 1 0 .832l-10.599 7.066a.5.5 0 0 1-.777-.416zM10.394 12L4 7.737v8.526zM14 7.737v8.526L20.394 12z"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="m12 13.333l-9.223 6.149A.5.5 0 0 1 2 19.066V4.934a.5.5 0 0 1 .777-.416L12 10.667V4.934a.5.5 0 0 1 .777-.416l10.599 7.066a.5.5 0 0 1 0 .832l-10.599 7.066a.5.5 0 0 1-.777-.416z"/></svg>`
             },
+            replay10: {
+                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
+                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
+            },
+            forward10: {
+                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
+                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
+            },
             play: {
                 outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="M8 18.392V5.608L18.226 12zM6 3.804v16.392a1 1 0 0 0 1.53.848l13.113-8.196a1 1 0 0 0 0-1.696L7.53 2.956A1 1 0 0 0 6 3.804"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/Remix-Design/RemixIcon/blob/master/License --><path fill="currentColor" d="M6 20.196V3.804a1 1 0 0 1 1.53-.848l13.113 8.196a1 1 0 0 1 0 1.696L7.53 21.044A1 1 0 0 1 6 20.196"/></svg>`
@@ -541,6 +549,14 @@ const iconStyles = {
             fastForward: {
                 outlined: `<svg width="32" height="32" viewBox="0.5 2 20 20"><!-- Icon from Material 3 --><path fill="currentColor" d="M2.5 16.125v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T10.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725m10 0v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T20.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725m-8-1.875L7.9 12L4.5 9.75zm10 0L17.9 12l-3.4-2.25z"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="0.5 2 20 20"><!-- Icon from Material 3 --><path fill="currentColor" d="M2.5 16.125v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T10.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725m10 0v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T20.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725"/></svg>`
+            },
+            replay10: {
+                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
+                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
+            },
+            forward10: {
+                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
+                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
             },
             play: {
                 outlined: `<svg width="32" height="32" viewBox="3 3 18 18"><!-- Icon from Material Symbols Rounded --><path fill="currentColor" d="M8 17.175V6.825q0-.425.3-.713t.7-.287q.125 0 .263.037t.262.113l8.15 5.175q.225.15.338.375t.112.475t-.112.475t-.338.375l-8.15 5.175q-.125.075-.262.113T9 18.175q-.4 0-.7-.288t-.3-.712m2-1.825L15.25 12L10 8.65z"/></svg>`,

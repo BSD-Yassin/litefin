@@ -2239,3 +2239,192 @@ body.resume-profile-selection-active .jellyfin-video-player {
     flex-wrap: wrap;
     justify-content: center;
 }
+
+/* ============================================================================
+   STEALTH / ANTI-SPOILER OSD LAYOUT & TRANSIENT ACTION HUD
+   ============================================================================ */
+
+/* Main container state for stealth layout */
+.player-osd.osd-layout-hidden .osd-main.osd-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Overlays (Layer 2: UpNextDialog, Skip Intro/Outro buttons, Modals) remain fully visible and active */
+.player-osd.osd-layout-hidden .osd-overlays {
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.player-osd.osd-layout-hidden .osd-overlays > * {
+    pointer-events: all;
+}
+
+/* ============================================================================
+   TRANSIENT ACTION HUD
+   ============================================================================ */
+.osd-stealth-hud {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    z-index: 950;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.22s ease-out, transform 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.osd-stealth-hud.hidden {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.82);
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.osd-stealth-hud-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 20px 32px;
+    min-width: 96px;
+    min-height: 96px;
+    border-radius: 48px;
+    background: rgba(22, 22, 26, 0.78);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    /* Strict rule adherence: No drop shadows or text shadows */
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    color: #ffffff;
+    box-sizing: border-box;
+}
+
+.osd-stealth-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.osd-stealth-icon-wrap svg {
+    width: 48px;
+    height: 48px;
+    display: block;
+    fill: currentColor;
+    color: #ffffff;
+    filter: none !important;
+}
+
+.osd-stealth-text {
+    font-family: var(--jf-font-family, sans-serif);
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+/* ============================================================================
+   STEALTH 2-SECOND HOLD GESTURE INDICATOR
+   - Subtle bottom-docked capsule with radial SVG progress ring
+   - Smooth 2-second linear fill transition on active hold
+   ============================================================================ */
+.osd-hold-indicator {
+    position: absolute;
+    bottom: 72px;
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+    z-index: 960;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 22px;
+    border-radius: 32px;
+    background: rgba(20, 20, 24, 0.82);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    opacity: 1;
+    transition: opacity 0.22s ease-out, transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.osd-hold-indicator.hidden {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.85);
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.osd-hold-ring {
+    width: 32px;
+    height: 32px;
+    transform: rotate(-90deg);
+    flex-shrink: 0;
+}
+
+.osd-hold-ring-bg {
+    stroke: rgba(255, 255, 255, 0.18);
+    fill: none;
+    stroke-width: 3.5;
+}
+
+.osd-hold-ring-progress {
+    /* Dynamic theme accent color stroke */
+    stroke: var(--jf-accent, #00a4dc);
+    fill: none;
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    stroke-dasharray: 98;
+    stroke-dashoffset: 98;
+    transition: none;
+}
+
+.osd-hold-indicator.active .osd-hold-ring-progress {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 2s linear;
+}
+
+.osd-hold-label {
+    font-family: var(--jf-font-family, sans-serif);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: rgba(255, 255, 255, 0.92);
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .osd-stealth-hud-pill {
+        padding: 14px 22px;
+        min-width: 76px;
+        min-height: 76px;
+        border-radius: 38px;
+        gap: 10px;
+    }
+
+    .osd-stealth-icon-wrap svg {
+        width: 36px;
+        height: 36px;
+    }
+
+    .osd-stealth-text {
+        font-size: 1.25rem;
+    }
+
+    .osd-hold-indicator {
+        bottom: 36px;
+        padding: 10px 18px;
+        gap: 10px;
+    }
+
+    .osd-hold-label {
+        font-size: 0.85rem;
+    }
+}
+
