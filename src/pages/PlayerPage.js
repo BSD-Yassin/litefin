@@ -1173,7 +1173,8 @@ class PlayerPage extends Page {
             if (this._osd) {
                 // If we have a cached program for this channel, prefer it over the generic channel item
                 const metadataItem = this._currentLiveTvProgram || this._item;
-                this._osd.updateItem(metadataItem);
+                // Use setMetadata rather than updateItem because this is an in-place metadata enrichment
+                this._osd.setMetadata(metadataItem);
             }
         }
 
@@ -1897,9 +1898,11 @@ class PlayerPage extends Page {
         // SYNC INITIAL METADATA:
         // If _updateLiveTvTitle already fetched the program before the OSD was ready,
         // push it now so the title element populates immediately on render.
+        // We call setMetadata rather than updateItem because this is an in-place guide
+        // data enrichment, not a media item / track transition.
         if (this._currentLiveTvProgram) {
             log.info('OSD ready - Syncing cached program metadata:', this._currentLiveTvProgram.Name);
-            this._osd.updateItem(this._currentLiveTvProgram);
+            this._osd.setMetadata(this._currentLiveTvProgram);
         }
 
         if (this._player) {
@@ -4959,8 +4962,9 @@ class PlayerPage extends Page {
                 // Cache for OSD init sync and playback start sync
                 this._currentLiveTvProgram = program;
 
+                // Update OSD title/logo with program metadata without triggering a track transition
                 if (this._osd) {
-                    this._osd.updateItem(program);
+                    this._osd.setMetadata(program);
                 }
             }
         } catch (err) {

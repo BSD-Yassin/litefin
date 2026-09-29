@@ -394,7 +394,11 @@ export default class OSDController extends Component {
 
             // Keep play/pause button state synchronized on all playback transitions
             this._player.on('play', () => this.updatePlayPauseButton());
-            this._player.on('playing', () => this.updatePlayPauseButton());
+            this._player.on('playing', () => {
+                this.updatePlayPauseButton();
+                // Ensure track synchronization and transition lockout release fire on playing
+                this.syncTracks();
+            });
             this._player.on('pause', () => this.updatePlayPauseButton());
 
             this._player.on('chaptersloaded', () => this._updateChapterButtons());
@@ -464,6 +468,14 @@ export default class OSDController extends Component {
 
         this.menus.forEach(menu => menu.hide?.());
 
+        // Cancel any pending focus restore lockout timers and release lock
+        if (this._focusRestoreLockoutTimer) {
+            clearTimeout(this._focusRestoreLockoutTimer);
+            this._focusRestoreLockoutTimer = null;
+        }
+        this._focusRestoreLockout = false;
+        this._trackTransitionLockoutActive = false;
+
         if (this._seekResumeTimeout) {
             clearTimeout(this._seekResumeTimeout);
             this._seekResumeTimeout = null;
@@ -473,6 +485,7 @@ export default class OSDController extends Component {
         if (this._player) {
             this._player.removeAllListeners('mediastreamschange');
             this._player.removeAllListeners('play');
+            this._player.removeAllListeners('playing');
             this._player.removeAllListeners('pause');
             this._player.removeAllListeners('chaptersloaded');
             this._player.removeAllListeners('seek');
@@ -4599,6 +4612,31 @@ export default class OSDController extends Component {
 
         /*
          * ============================================================================
+         * LIVE TV EPG PROGRAM METADATA CHECK:
+         * When updating metadata for the currently airing TV program (EPG guide item),
+         * the underlying media stream is already established and running. This is a
+         * metadata update, NOT a track transition between different media items.
+         * We must not engage track transition lockouts for program guide updates.
+         * ============================================================================
+         */
+        if (item?.Type === 'Program' || (this._currentItem?.Type === 'TvChannel' && item?.ChannelId)) {
+            return;
+        }
+
+        /*
+         * ============================================================================
+         * ACTIVE PLAYBACK METADATA REFRESH GUARD:
+         * If the player is already playing and no track switch is in progress on the
+         * player page, treating this call as an indefinite track transition lockout
+         * would trap focus indefinitely.
+         * ============================================================================
+         */
+        if (this._playerPage && !this._playerPage._isSwitching && this._player && !this._player.isPaused()) {
+            return;
+        }
+
+        /*
+         * ============================================================================
          * TRACK TRANSITION FOCUS RESET GUARD
          * ============================================================================
          * When switching tracks or advancing to the next episode (e.g., after clicking
@@ -4628,6 +4666,26 @@ export default class OSDController extends Component {
          */
         this._trackTransitionLockoutActive = true;
         this._focusRestoreLockout = true;
+
+        /*
+         * ============================================================================
+         * SAFETY FALLBACK EXPIRATION TIMER:
+         * Never allow the transition lockout to remain active indefinitely if syncTracks()
+         * or media events fail to fire (e.g., stalled network, stream error, or dropped
+         * playback events). Automatically release the lockout after 8 seconds as a safeguard.
+         * ============================================================================
+         */
+        if (this._focusRestoreLockoutTimer) {
+            clearTimeout(this._focusRestoreLockoutTimer);
+        }
+        this._focusRestoreLockoutTimer = setTimeout(() => {
+            if (this._trackTransitionLockoutActive) {
+                log.warn('OSDController: Transition lockout safety timeout expired — releasing lockout');
+                this._focusRestoreLockout = false;
+                this._trackTransitionLockoutActive = false;
+                this._focusRestoreLockoutTimer = null;
+            }
+        }, 8000);
     }
 
     _getFormattedTitle(item) {
