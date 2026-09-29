@@ -5262,7 +5262,6 @@ class DetailsPage extends Page {
 
             // ── Add to Playlist / Collection ────────────────────────────────────
             // Show playlist/collection target options for supported media types.
-            // Following Apple Human Interface Guidelines and Jellyfin authorization rules:
             // - Menus only surface actionable, permitted commands to keep interactions clean.
             // - Playlists are user-level collections, permitted for all active accounts.
             // - BoxSets / Collections alter shared server libraries and are strictly restricted

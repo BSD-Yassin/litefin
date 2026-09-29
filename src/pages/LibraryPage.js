@@ -1798,10 +1798,10 @@ class LibraryPage extends Page {
                     collectionType === 'tvshows'
                         ? 'Series'
                         : collectionType === 'movies'
-                          ? 'Movie'
-                          : collectionType === 'music'
-                            ? 'MusicAlbum'
-                            : 'Movie,Series';
+                            ? 'Movie'
+                            : collectionType === 'music'
+                                ? 'MusicAlbum'
+                                : 'Movie,Series';
 
                 const rowPromises = allGenres.map(async (genre) => {
                     const params = {
@@ -3096,10 +3096,10 @@ class LibraryPage extends Page {
                         this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr'
                             ? 'discover'
                             : this.state.viewType === 'Upcoming'
-                              ? 'upcoming'
-                              : this.state.viewType === 'Albums'
-                                ? 'music'
-                                : 'library',
+                                ? 'upcoming'
+                                : this.state.viewType === 'Albums'
+                                    ? 'music'
+                                    : 'library',
                     showMeta: !isLandscape && this.state.viewMode === 'list',
                     isGrid: true,
                     cardWidth: cardWidth
@@ -3682,8 +3682,8 @@ class LibraryPage extends Page {
         const nextUpTarget = this._isSubView()
             ? null
             : isHorizontalLayout || isGenresView
-              ? 'library-tabs'
-              : 'library-controls';
+                ? 'library-tabs'
+                : 'library-controls';
 
         rows.forEach((row, rowIndex) => {
             const headerId = `header-${rowIndex}`;
@@ -3858,22 +3858,22 @@ class LibraryPage extends Page {
                 onEnter:
                     isHorizontalRow && virtualRow
                         ? (fromElement, options) => {
-                              if (
-                                  fromElement &&
-                                  options &&
-                                  (options.direction === 'up' || options.direction === 'down')
-                              ) {
-                                  virtualRow._updateWindow(virtualRow.currentIndex);
-                                  return virtualRow.domNodes.get(virtualRow.currentIndex);
-                              }
-                              return null;
-                          }
+                            if (
+                                fromElement &&
+                                options &&
+                                (options.direction === 'up' || options.direction === 'down')
+                            ) {
+                                virtualRow._updateWindow(virtualRow.currentIndex);
+                                return virtualRow.domNodes.get(virtualRow.currentIndex);
+                            }
+                            return null;
+                        }
                         : null,
                 onRestoreIndex:
                     isHorizontalRow && virtualRow
                         ? (index) => {
-                              return virtualRow.focusByIndex(index);
-                          }
+                            return virtualRow.focusByIndex(index);
+                        }
                         : null
             });
         });
@@ -4131,7 +4131,6 @@ class LibraryPage extends Page {
      * In unlimited mode, smoothly glides the viewport directly to the exact
      * letter section using mathematically precise server offsets and real DOM
      * geometry. Retargets seamlessly if the user rapidly scrubs across letters,
-     * following Apple Human Interface Guidelines for responsive fluid motion.
      *
      * Eliminates "letter above" issues by aligning to the exact DOM card rect
      * and guarantees no dropped clicks via sequence tokens.
@@ -4748,17 +4747,17 @@ class LibraryPage extends Page {
 
             const sortOptions = isTv
                 ? [
-                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
-                      { label: 'OptionFirstAirDate', fallback: 'First Air Date', value: 'first_air_date' },
-                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
-                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
-                  ]
+                    { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                    { label: 'OptionFirstAirDate', fallback: 'First Air Date', value: 'first_air_date' },
+                    { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                    { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                ]
                 : [
-                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
-                      { label: 'OptionReleaseDate', fallback: 'Release Date', value: 'release_date' },
-                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
-                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
-                  ];
+                    { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                    { label: 'OptionReleaseDate', fallback: 'Release Date', value: 'release_date' },
+                    { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                    { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                ];
 
             const orderOptions = [
                 { label: 'Descending', fallback: 'Descending', value: 'Descending' },
@@ -5037,8 +5036,8 @@ class LibraryPage extends Page {
                     tempMode === 'list'
                         ? 'view-mode-options'
                         : tempGridMode === 'dynamic'
-                          ? 'columns-options'
-                          : 'grid-mode-options',
+                            ? 'columns-options'
+                            : 'grid-mode-options',
                 selector: 'button'
             });
         };
@@ -5052,8 +5051,8 @@ class LibraryPage extends Page {
                     <h3 class="section-subtitle" style="font-size: 1.2rem; opacity: 0.7; margin-bottom: 12px;">Layout Style</h3>
                     <div class="view-mode-options" id="view-mode-options" style="display: flex; gap: 10px; margin-bottom: 10px;">
                         ${modes
-                            .map(
-                                (m) => `
+                .map(
+                    (m) => `
                             <button class="view-mode-option-btn ${m.value === tempMode ? 'selected' : ''}"
                                     data-mode="${m.value}"
                                     tabindex="0">
@@ -5061,8 +5060,8 @@ class LibraryPage extends Page {
                                 <span class="vm-label">${i18n.t(m.label)}</span>
                             </button>
                         `
-                            )
-                            .join('')}
+                )
+                .join('')}
                     </div>
                 </div>
 
@@ -5194,8 +5193,8 @@ class LibraryPage extends Page {
                         <h2 class="modal-title" data-i18n="HeaderSortBy">${i18n.t('HeaderSortBy')}</h2>
                         <div class="modal-options">
                             ${sortOptions
-                                .map(
-                                    (opt) => `
+                .map(
+                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentSort ? 'selected' : ''}" 
                                         data-type="sort" 
                                         data-value="${opt.value}"
@@ -5204,8 +5203,8 @@ class LibraryPage extends Page {
                                     <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
-                                )
-                                .join('')}
+                )
+                .join('')}
                         </div>
                     </div>
 
@@ -5214,8 +5213,8 @@ class LibraryPage extends Page {
                         <h2 class="modal-title" data-i18n="HeaderSortOrder">${i18n.t('HeaderSortOrder')}</h2>
                         <div class="modal-options">
                             ${orderOptions
-                                .map(
-                                    (opt) => `
+                .map(
+                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentOrder ? 'selected' : ''}" 
                                         data-type="order" 
                                         data-value="${opt.value}"
@@ -5224,8 +5223,8 @@ class LibraryPage extends Page {
                                     <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
-                                )
-                                .join('')}
+                )
+                .join('')}
                         </div>
                     </div>
                 </div>
@@ -5446,15 +5445,15 @@ class LibraryPage extends Page {
         // ------------------------------------------------------------------
         const genreItems = Array.isArray(data?.Genres)
             ? data.Genres.map((g) => {
-                  if (typeof g === 'object' && g !== null) {
-                      return {
-                          label: g.label || g.Name || '',
-                          value: g.value || g.Id || g.Name || '',
-                          type: g.type || 'multi'
-                      };
-                  }
-                  return { label: g, value: g, type: 'multi' };
-              })
+                if (typeof g === 'object' && g !== null) {
+                    return {
+                        label: g.label || g.Name || '',
+                        value: g.value || g.Id || g.Name || '',
+                        type: g.type || 'multi'
+                    };
+                }
+                return { label: g, value: g, type: 'multi' };
+            })
             : [];
 
         // ------------------------------------------------------------------
@@ -5462,18 +5461,18 @@ class LibraryPage extends Page {
         // ------------------------------------------------------------------
         const audioLanguageItems = Array.isArray(data?.AudioLanguages)
             ? data.AudioLanguages.map((l) => ({
-                  label: l.Name || l.label || l.Value || l,
-                  value: l.Value || l.value || l,
-                  type: 'multi'
-              }))
+                label: l.Name || l.label || l.Value || l,
+                value: l.Value || l.value || l,
+                type: 'multi'
+            }))
             : [];
 
         const subtitleLanguageItems = Array.isArray(data?.SubtitleLanguages)
             ? data.SubtitleLanguages.map((l) => ({
-                  label: l.Name || l.label || l.Value || l,
-                  value: l.Value || l.value || l,
-                  type: 'multi'
-              }))
+                label: l.Name || l.label || l.Value || l,
+                value: l.Value || l.value || l,
+                type: 'multi'
+            }))
             : [];
 
         const languageItems = Array.isArray(data?.Languages)
@@ -5487,104 +5486,104 @@ class LibraryPage extends Page {
         // Sections Definition
         const sections = isSeerr
             ? [
-                  {
-                      title: 'Genres',
-                      id: 'sec-genres',
-                      itemKey: 'genre', // Key in state.filters for Seerr
-                      separator: ',',
-                      items: genreItems
-                  },
-                  {
-                      title: 'OriginalLanguage',
-                      id: 'sec-languages',
-                      itemKey: 'language', // Key in state.filters for Seerr
-                      separator: '|', // Pipe-separated ISO codes for Seerr/TMDB e.g. ar|zh
-                      items: languageItems
-                  },
-                  {
-                      title: 'ContentRating',
-                      id: 'sec-certifications',
-                      itemKey: 'certification', // Key in state.filters for Seerr
-                      separator: '|', // Pipe-separated certification values e.g. NR|G|PG-13
-                      items: certificationItems
-                  }
-              ]
+                {
+                    title: 'Genres',
+                    id: 'sec-genres',
+                    itemKey: 'genre', // Key in state.filters for Seerr
+                    separator: ',',
+                    items: genreItems
+                },
+                {
+                    title: 'OriginalLanguage',
+                    id: 'sec-languages',
+                    itemKey: 'language', // Key in state.filters for Seerr
+                    separator: '|', // Pipe-separated ISO codes for Seerr/TMDB e.g. ar|zh
+                    items: languageItems
+                },
+                {
+                    title: 'ContentRating',
+                    id: 'sec-certifications',
+                    itemKey: 'certification', // Key in state.filters for Seerr
+                    separator: '|', // Pipe-separated certification values e.g. NR|G|PG-13
+                    items: certificationItems
+                }
+            ]
             : [
-                  {
-                      title: 'Filters',
-                      id: 'sec-filters',
-                      items: [
-                          { label: 'Played', key: 'IsPlayed', type: 'boolean' },
-                          { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
-                          { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
-                          { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
-                      ]
-                  },
-                  {
-                      title: 'Features',
-                      id: 'sec-features',
-                      hidden: isMusic, // Hide video features for music
-                      items: [
-                          { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
-                          { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
-                          { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
-                          { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
-                          { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
-                      ]
-                  },
-                  {
-                      title: 'Genres',
-                      id: 'sec-genres',
-                      itemKey: 'Genres', // Key in state
-                      items: genreItems
-                  },
-                  {
-                      title: 'HeaderParentalRatings',
-                      id: 'sec-ratings',
-                      itemKey: 'OfficialRatings',
-                      items: (data?.OfficialRatings || []).map((r) => ({ label: r, value: r, type: 'multi' }))
-                  },
-                  {
-                      title: 'Tags',
-                      id: 'sec-tags',
-                      itemKey: 'Tags',
-                      items: (data?.Tags || []).map((t) => ({ label: t, value: t, type: 'multi' }))
-                  },
-                  {
-                      title: 'HeaderVideoTypes',
-                      id: 'sec-videotypes',
-                      hidden: isMusic, // Hide video types for music
-                      itemKey: 'VideoTypes', // Comma list
-                      items: [
-                          { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
-                          { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
-                          { label: 'Option4K', key: 'Is4K', type: 'boolean' },
-                          { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
-                          { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
-                          { label: 'Option3D', key: 'Is3D', type: 'boolean' }
-                      ]
-                  },
-                  {
-                      title: 'AudioTracks',
-                      id: 'sec-audio-languages',
-                      hidden: isMusic, // Hide audio track filter for music
-                      itemKey: 'AudioLanguages',
-                      items: audioLanguageItems
-                  },
-                  {
-                      title: 'SubtitleTracks',
-                      id: 'sec-subtitle-languages',
-                      hidden: isMusic, // Hide subtitle track filter for music
-                      itemKey: 'SubtitleLanguages',
-                      items: subtitleLanguageItems
-                  },
-                  {
-                      title: 'HeaderYears',
-                      id: 'sec-years',
-                      itemKey: 'Years',
-                      items: (data?.Years || []).map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
-                  }
-              ];
+                {
+                    title: 'Filters',
+                    id: 'sec-filters',
+                    items: [
+                        { label: 'Played', key: 'IsPlayed', type: 'boolean' },
+                        { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
+                        { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
+                        { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
+                    ]
+                },
+                {
+                    title: 'Features',
+                    id: 'sec-features',
+                    hidden: isMusic, // Hide video features for music
+                    items: [
+                        { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
+                        { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
+                        { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
+                        { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
+                        { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
+                    ]
+                },
+                {
+                    title: 'Genres',
+                    id: 'sec-genres',
+                    itemKey: 'Genres', // Key in state
+                    items: genreItems
+                },
+                {
+                    title: 'HeaderParentalRatings',
+                    id: 'sec-ratings',
+                    itemKey: 'OfficialRatings',
+                    items: (data?.OfficialRatings || []).map((r) => ({ label: r, value: r, type: 'multi' }))
+                },
+                {
+                    title: 'Tags',
+                    id: 'sec-tags',
+                    itemKey: 'Tags',
+                    items: (data?.Tags || []).map((t) => ({ label: t, value: t, type: 'multi' }))
+                },
+                {
+                    title: 'HeaderVideoTypes',
+                    id: 'sec-videotypes',
+                    hidden: isMusic, // Hide video types for music
+                    itemKey: 'VideoTypes', // Comma list
+                    items: [
+                        { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
+                        { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
+                        { label: 'Option4K', key: 'Is4K', type: 'boolean' },
+                        { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
+                        { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
+                        { label: 'Option3D', key: 'Is3D', type: 'boolean' }
+                    ]
+                },
+                {
+                    title: 'AudioTracks',
+                    id: 'sec-audio-languages',
+                    hidden: isMusic, // Hide audio track filter for music
+                    itemKey: 'AudioLanguages',
+                    items: audioLanguageItems
+                },
+                {
+                    title: 'SubtitleTracks',
+                    id: 'sec-subtitle-languages',
+                    hidden: isMusic, // Hide subtitle track filter for music
+                    itemKey: 'SubtitleLanguages',
+                    items: subtitleLanguageItems
+                },
+                {
+                    title: 'HeaderYears',
+                    id: 'sec-years',
+                    itemKey: 'Years',
+                    items: (data?.Years || []).map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
+                }
+            ];
 
         // Filter out empty and hidden sections
         const validSections = sections.filter((s) => s.items.length > 0 && !s.hidden);
@@ -5604,16 +5603,16 @@ class LibraryPage extends Page {
                     <!-- Left Sidebar -->
                     <div class="filter-sidebar" id="filter-sidebar">
                         ${validSections
-                            .map(
-                                (s) => `
+                .map(
+                    (s) => `
                             <button class="filter-category-btn ${s.id === activeSectionId ? 'active' : ''}" 
                                     data-id="${s.id}" tabindex="0"
                                     data-i18n="${s.title}">
                                 ${i18n.t(s.title)}
                             </button>
                         `
-                            )
-                            .join('')}
+                )
+                .join('')}
                     </div>
 
                     <!-- Right Main Content -->
@@ -5977,8 +5976,8 @@ class LibraryPage extends Page {
                 </div>
                 <div class="modal-options page-content" id="modal-options">
                     ${options
-                        .map(
-                            (opt) => `
+                .map(
+                    (opt) => `
                         <button class="modal-option-btn ${opt.selected ? 'selected' : ''}" 
                                 data-value="${opt.value}" 
                                 tabindex="0">
@@ -5986,8 +5985,8 @@ class LibraryPage extends Page {
                             <span class="check-icon">✓</span>
                         </button>
                     `
-                        )
-                        .join('')}
+                )
+                .join('')}
                 </div>
                 <button class="modal-close-btn" id="modal-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
             </div>

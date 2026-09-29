@@ -1285,17 +1285,20 @@ html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .sidebar-ite
 /* ----------------------------------------------------------------------------
    11. Floating Island Layout Dedicated Styling
    ---------------------------------------------------------------------------- */
-/* Transparent sidebar rail container */
+/* Transparent sidebar rail container*/
 html[data-layout-sidebar="floating-island"] .sidebar,
 html[data-layout-sidebar="floating-island"] .sidebar:hover,
 html[data-layout-sidebar="floating-island"] .sidebar.expanded {
+    /* Use column flexbox layout with top alignment so auto margins distribute space cleanly */
     display: flex !important;
     flex-direction: column !important;
-    justify-content: space-between !important;
+    justify-content: flex-start !important;
     align-items: flex-start !important;
+    /* Full viewport height bounds with generous safe-area padding */
     height: 100vh !important;
     padding: 20px 0 16px 0 !important;
     box-sizing: border-box !important;
+    /* Completely transparent rail backdrop */
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
@@ -1358,9 +1361,13 @@ html[data-layout-sidebar="floating-island"] #sidebar-logo-header .logo-icon::bef
 }
 
 /* User Profile in footer Rounded Floating Island Base */
+/* Pinned unconditionally to the bottom edge using flexbox auto margins */
 html[data-layout-sidebar="floating-island"] .sidebar-footer {
+    /* Prevent shrinking under constrained height */
     flex-shrink: 0 !important;
-    margin: 0 !important;
+    /* Auto top margin guarantees it remains at the bottom, even if the logo is hidden */
+    margin-top: auto !important;
+    margin-bottom: 0 !important;
     padding-bottom: 0 !important;
 }
 
@@ -1400,103 +1407,94 @@ html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.
     transform: scale(1.06) !important;
 }
 
-/* Middle items continuous unified floating island capsule (normal compact mode) */
-html[data-layout-sidebar="floating-island"] .sidebar:not(.show-lib-icons-collapsed) .sidebar-content {
-    flex: 0 0 auto !important;
+/*
+ * ============================================================================
+ * FLOATING ISLAND - UNIFIED MIDDLE CAPSULE & STATIONARY PILL
+ * ============================================================================
+ * - Fluid, balanced vertical centering between the header logo and profile footer
+ * - Content stays fully within normal flexbox document flow (no position: absolute)
+ *   so the footer User Profile is NEVER displaced to the top when logo is hidden
+ * - Dynamic pill background hugs items when compact and stays stationary during
+ *   overflow scrolling with silky smooth backdrop blur and border styling.
+ * ============================================================================
+ */
+
+/* Content container remains in normal flexbox flow and centers dynamically */
+html[data-layout-sidebar="floating-island"] .sidebar-content {
+    /* Allow flexbox to size content to children while respecting max available space */
+    flex: 0 1 auto !important;
     height: auto !important;
+    /* Reserve headroom for header logo and footer user profile */
     max-height: calc(100vh - 200px) !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
     justify-content: flex-start !important;
     position: relative !important;
-    margin: auto 0 !important;
-    padding: 8px 0 !important;
+    /* Auto top margin paired with footer auto top margin evenly splits vertical space */
+    margin-top: auto !important;
+    margin-bottom: 0 !important;
+    padding: 6px 0 !important;
     box-sizing: border-box !important;
-    overflow: visible !important;
+    /* Native smooth vertical scrolling when content exceeds container bounds */
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    z-index: 5 !important;
+    width: 700px !important;
+    /* Transparent hit test passthrough so empty rail area doesn't trap mouse clicks */
+    pointer-events: none !important;
 }
 
+/* When logo is hidden in settings, expand available vertical headroom */
+html[data-layout-sidebar="floating-island"] .sidebar.sidebar-logo-hidden .sidebar-content {
+    max-height: calc(100vh - 128px) !important;
+}
+
+/* Individual navigation buttons within the island */
 html[data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item,
 html[data-layout-sidebar="floating-island"] .sidebar-content .library-item {
     height: 60px !important;
     min-height: 60px !important;
     margin: 2px 0 !important;
+    /* Re-enable pointer events for buttons themselves */
+    pointer-events: auto !important;
 }
 
-html[data-layout-sidebar="floating-island"] .sidebar:not(.show-lib-icons-collapsed) .sidebar-content::before {
-    content: '';
-    position: absolute;
-    left: 268px;
-    top: 0;
-    bottom: 0;
-    width: 64px;
-    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
-    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
-    border-radius: 36px !important;
-    z-index: 1;
-    pointer-events: none;
-    box-shadow: none !important;
+/* Suppress redundant ::before pseudo-element on content container in favor of the stationary capsule */
+html[data-layout-sidebar="floating-island"] .sidebar-content::before {
+    display: none !important;
+    content: none !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:not(.show-lib-icons-collapsed) .sidebar-content::before {
-    left: auto !important;
-    right: 262px !important;
-}
-
-/* ----------------------------------------------------------------------------
- * Stationary Floating Island Capsule (Full length between logo & profile)
- * ----------------------------------------------------------------------------
- * When collapsed library icons are displayed and scrolling is needed, this
- * stationary capsule spans the full vertical height between the top logo and
- * bottom user profile. Because it resides on .sidebar outside .sidebar-content,
- * scrolling content inside does not displace or shorten the island geometry.
- * ---------------------------------------------------------------------------- */
+/*
+ * Stationary Floating Island Capsule Pill
+ * Dynamically synchronized to .sidebar-content bounds via JS geometry.
+ * Because it resides on .sidebar outside .sidebar-content, scrolling items
+ * will never displace or distort the rounded pill capsule.
+ */
 html[data-layout-sidebar="floating-island"] .floating-island-pill {
-    display: none;
-}
-
-html[data-layout-sidebar="floating-island"] .sidebar.show-lib-icons-collapsed .floating-island-pill {
     display: block !important;
     position: absolute !important;
     left: 268px !important;
-    top: 96px !important;
-    bottom: 92px !important;
     width: 64px !important;
+    /* Apple glassmorphism visual styling */
     background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
     border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
     border-radius: 36px !important;
     z-index: 1 !important;
     pointer-events: none !important;
     box-shadow: none !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    backdrop-filter: blur(20px) !important;
+    /* Smooth Apple spring/cubic-bezier transition when resizing or re-centering */
+    transition: top 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar.show-lib-icons-collapsed .floating-island-pill {
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .floating-island-pill {
     left: auto !important;
     right: 262px !important;
-}
-
-/* Position scrolling content directly over the stationary pill track */
-html[data-layout-sidebar="floating-island"] .sidebar.show-lib-icons-collapsed .sidebar-content {
-    position: absolute !important;
-    left: 0 !important;
-    top: 96px !important;
-    bottom: 92px !important;
-    height: auto !important;
-    max-height: none !important;
-    width: 700px !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    pointer-events: none !important;
-    scrollbar-width: none !important;
-    -ms-overflow-style: none !important;
-    margin: 0 !important;
-    padding: 14px 0 26px 0 !important;
-    box-sizing: border-box !important;
-    z-index: 5 !important;
-}
-
-html[data-layout-sidebar="floating-island"] .sidebar.show-lib-icons-collapsed .sidebar-content::before {
-    display: none !important;
 }
 
 /* All middle buttons in floating island have NO background pseudo-elements */

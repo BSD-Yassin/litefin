@@ -5255,8 +5255,7 @@ class SettingsPage extends Page {
                  * Alphabet Quick-Jump Scroll Behavior (Only in Unlimited Mode)
                  * Enables scrolling directly to letter anchors instead of querying
                  * and filtering down the library items strictly to that letter.
-                 * Designed with Apple Human Interface Guidelines for sleek, fluid
-                 * tactile control on TV and desktop navigation.
+                 * Designed for sleek, fluid tactile control on TV and webOS navigation.
                  * ------------------------------------------------------------- -->
                 <div class="setting-item" id="alpha-picker-scroll-mode-item" style="${storage.getItem('pref:libraryPageSize') === 'unlimited' ? '' : 'display: none;'}">
                     <div class="setting-label">

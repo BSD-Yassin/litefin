@@ -277,6 +277,17 @@ class Sidebar extends Component {
         };
         eventBus.on('seerr:statusResolved', this._onSeerrStatusResolved);
 
+        // ---------------------------------------------------------------------
+        // FLOATING ISLAND GEOMETRY RESIZE LISTENER
+        // ---------------------------------------------------------------------
+        // Keep stationary pill bounds in sync with screen dimension adjustments
+        this._onResizeGeometry = () => this._updateFloatingIslandGeometry();
+        window.addEventListener('resize', this._onResizeGeometry);
+
+        // Initial geometry calculation once DOM tree mounts and reflow settles
+        this._updateFloatingIslandGeometry();
+        setTimeout(() => this._updateFloatingIslandGeometry(), 50);
+
         // Resolve the default focus item from saved prefs (falls back to 'home')
         const defaultFocusId = sidebarLayoutManager.getDefaultFocus();
 
@@ -388,6 +399,7 @@ class Sidebar extends Component {
         this._seerrAvailable = isAvailable;
         button.style.display = isAvailable ? '' : 'none';
         focusManager.invalidateCache('sidebar');
+        this._updateFloatingIslandGeometry();
     }
 
     onDestroyed() {
@@ -444,6 +456,12 @@ class Sidebar extends Component {
 
         if (this._onSidebarItemsAlignChanged) {
             eventBus.off('pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged);
+        }
+
+        // Clean up floating island resize listener
+        if (this._onResizeGeometry) {
+            window.removeEventListener('resize', this._onResizeGeometry);
+            this._onResizeGeometry = null;
         }
 
         // Clean up floating popover event listeners
@@ -532,6 +550,9 @@ class Sidebar extends Component {
                 const isLogoVisible = logoPref !== 'hidden';
                 logoHeader.style.display = isLogoVisible ? '' : 'none';
 
+                // Track logo visibility state on parent container for CSS layout headroom adjustments
+                this.el.classList.toggle('sidebar-logo-hidden', !isLogoVisible);
+
                 // Determine if logo behaves as an interactive/focusable button
                 const isClickable = logoPref === 'settings' || logoPref === 'home';
                 logoHeader.classList.toggle('sidebar-item', isClickable);
@@ -582,6 +603,9 @@ class Sidebar extends Component {
 
                 // Invalidate focusManager cache since focusability of a header element changed
                 focusManager.invalidateCache('sidebar');
+
+                // Synchronize floating island pill geometry with the updated logo headroom
+                this._updateFloatingIslandGeometry();
             }
         } catch (err) {
             log.error('Failed to update sidebar logo settings due to DOM error:', err);
@@ -1375,6 +1399,9 @@ class Sidebar extends Component {
         this.el.classList.toggle('align-center', alignPref === 'center' && shouldAlign);
         this.el.classList.toggle('align-bottom', alignPref === 'bottom' && shouldAlign);
 
+        // Synchronize floating island pill geometry with the updated vertical alignment
+        this._updateFloatingIslandGeometry();
+
         const focused = this.el.querySelector('.sidebar-item.focused');
         if (focused) {
             // Update immediately for engines that reflow synchronously
@@ -1383,6 +1410,57 @@ class Sidebar extends Component {
             setTimeout(() => {
                 this._updateIndicator(focused, { instant: true });
             }, 50);
+        }
+    }
+
+    /**
+     * =========================================================================
+     * FLOATING ISLAND GEOMETRY SYNCHRONIZATION
+     * =========================================================================
+     * - Dynamically calculates the offset and height of .sidebar-content so the
+     *   stationary background pill perfectly hugs the navigation items when
+     *   compact (no awkward empty tail), and stays stationary at max-height when
+     *   scrolling is active.
+     * - Re-computes whenever library items, logo visibility, or window dimensions
+     *   change to keep the UI pixel-perfect across all screen sizes.
+     * =========================================================================
+     * @private
+     */
+    _updateFloatingIslandGeometry() {
+        // Guard check: ensure root sidebar element exists
+        if (!this.el) return;
+
+        // Only compute when layout is configured as floating-island
+        if (!layoutManager.isFloatingIslandSidebarLayout()) return;
+
+        // Query the stationary pill capsule and scrolling content container
+        const pill = this.el.querySelector('#floating-island-pill');
+        const content = this.el.querySelector('.sidebar-content');
+        if (!pill || !content) return;
+
+        // Compute relative bounding box of content inside the fixed sidebar container
+        const update = () => {
+            if (!this.el || !pill || !content) return;
+
+            // Measure relative coordinates between fixed sidebar container and content box
+            const sidebarRect = this.el.getBoundingClientRect();
+            const contentRect = content.getBoundingClientRect();
+            const top = contentRect.top - sidebarRect.top;
+            const height = contentRect.height;
+
+            // Only apply valid non-zero bounding box values
+            if (height > 0) {
+                pill.style.top = `${Math.round(top)}px`;
+                pill.style.height = `${Math.round(height)}px`;
+            }
+        };
+
+        // Run immediately for snappy UI response
+        update();
+
+        // Also schedule in requestAnimationFrame to catch reflows once TV paint settles
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(update);
         }
     }
 
@@ -1689,8 +1767,11 @@ class Sidebar extends Component {
         // Invalidate the focus cache so the updated DOM structure is re-scanned
         focusManager.invalidateCache('sidebar');
 
-        // Re-evaluate sidebar vertical alignment (center vs top) once DOM reflow settles
-        setTimeout(() => this._updateSidebarItemsAlign(), 0);
+        // Re-evaluate sidebar vertical alignment (center vs top) and floating island geometry once DOM reflow settles
+        setTimeout(() => {
+            this._updateSidebarItemsAlign();
+            this._updateFloatingIslandGeometry();
+        }, 0);
     }
 
     /**
