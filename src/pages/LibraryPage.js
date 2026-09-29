@@ -1010,7 +1010,12 @@ class LibraryPage extends Page {
         if (this._onGridScroll) {
             const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
             scrollContainer?.removeEventListener('scroll', this._onGridScroll);
+            scrollContainer?.removeEventListener('wheel', this._onGridWheel);
+            scrollContainer?.removeEventListener('touchmove', this._onGridTouch);
+            window.removeEventListener('scroll', this._onGridScroll);
             this._onGridScroll = null;
+            this._onGridWheel = null;
+            this._onGridTouch = null;
         }
         if (this._gridEvalFrameId) {
             cancelAnimationFrame(this._gridEvalFrameId);
@@ -2073,7 +2078,9 @@ class LibraryPage extends Page {
     }
 
     _updatePaginationUI() {
+        const grid = this.$('#library-grid');
         if (this.state.isInfinite) {
+            if (grid) grid.style.paddingBottom = 'calc(100vh - 250px)';
             const footer = this.$('#library-pagination');
             if (footer) footer.style.display = 'none';
 
@@ -2098,6 +2105,8 @@ class LibraryPage extends Page {
         this.$('#pagination-info').textContent = i18n.t('PageNumberXOfY', [currentPage, totalPages || 1]);
 
         // Hide/Show logic for single page or horizontal row views (Genres/Suggestions)
+        if (grid) grid.style.paddingBottom = '';
+
         const isHorizontalView =
             this.state.viewType === 'Genres' ||
             this.state.viewType === 'MusicGenres' ||
@@ -2875,6 +2884,9 @@ class LibraryPage extends Page {
         // when top rows are evicted from the DOM. Height starts at 0px.
         grid.innerHTML = '<div id="grid-top-spacer" style="height:0;width:100%;flex:0 0 100%"></div>';
 
+        // Provide bottom scroll clearance in unlimited mode so any row (even the last row) can reach top
+        grid.style.paddingBottom = this.state.isInfinite ? 'calc(100vh - 250px)' : '';
+
         // Render the first chunk immediately — this is what the user sees on load
         this._appendGridChunk(grid, items, columns);
 
@@ -3051,6 +3063,11 @@ class LibraryPage extends Page {
         this._onGridFocusChanged = (element) => {
             if (!element || !grid.contains(element)) return;
             if (!element.classList.contains('media-card')) return;
+
+            // Direct D-pad focus takes precedence over manual scroll tracking
+            this._isManualScroll = false;
+            this._lastFocusTime = Date.now();
+
             this._gridFocusElement = element;
             this._pendingFocusEval = true;
             this._scheduleGridEval();
@@ -3059,11 +3076,12 @@ class LibraryPage extends Page {
 
         const scrollContainer = this.$('#library-scroll-container') || this.el.querySelector('.page-content');
         if (scrollContainer) {
-            // Clean up any previously attached scroll/wheel handlers
+            // Clean up any previously attached scroll/wheel/touch handlers
             if (this._onGridScroll) {
                 scrollContainer.removeEventListener('scroll', this._onGridScroll);
                 window.removeEventListener('scroll', this._onGridScroll);
                 scrollContainer.removeEventListener('wheel', this._onGridWheel);
+                scrollContainer.removeEventListener('touchmove', this._onGridTouch);
             }
             this._lastGridScrollTop = 0;
             this._onGridScroll = () => {
@@ -3073,14 +3091,22 @@ class LibraryPage extends Page {
                 this._scheduleGridEval();
             };
             this._onGridWheel = () => {
-                // In some TV environments (webOS magic remote wheel), wheel events may fire before or independently of scroll
+                // Mark manual scroll active when user spins wheel or magic remote
+                this._isManualScroll = true;
+                this._lastManualScrollTime = Date.now();
                 this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
                 this._pendingScrollEval = true;
                 this._scheduleGridEval();
             };
+            this._onGridTouch = () => {
+                // Mark manual scroll active when user touch-flings or drags
+                this._isManualScroll = true;
+                this._lastManualScrollTime = Date.now();
+            };
             scrollContainer.addEventListener('scroll', this._onGridScroll, { passive: true });
             window.addEventListener('scroll', this._onGridScroll, { passive: true });
             scrollContainer.addEventListener('wheel', this._onGridWheel, { passive: true });
+            scrollContainer.addEventListener('touchmove', this._onGridTouch, { passive: true });
         }
 
         // Register pagination footer — the grid's leaveDown points here.
@@ -3456,11 +3482,6 @@ class LibraryPage extends Page {
                         this._appendGridChunk(grid, this.state.items, currentColumns);
                     }
 
-                    // Proactively stream next batch when approaching end of loaded array
-                    const prefetchThreshold = this.state.items.length - (currentColumns * 3);
-                    if (this.state.isInfinite && itemIndex >= prefetchThreshold && this.state.items.length < this.state.totalRecordCount) {
-                        this._loadNextInfiniteBatch();
-                    }
                 } else {
                     const lookBehindItems = currentColumns === 1 ? 6 : currentColumns * 2;
                     const prependThreshold = this.state.gridWindowStart + lookBehindItems;
@@ -3469,8 +3490,15 @@ class LibraryPage extends Page {
                     }
                 }
 
+                // Proactively stream next batch when approaching end of loaded array (works on both moves & letter jumps)
+                const prefetchThreshold = this.state.items.length - (currentColumns * 4);
+                if (this.state.isInfinite && itemIndex >= prefetchThreshold && this.state.items.length < this.state.totalRecordCount) {
+                    this._loadNextInfiniteBatch();
+                }
+
                 const currentRow = Math.floor(itemIndex / currentColumns);
-                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+                // Forward explicit itemIndex so alphabet rail matches focused card precisely
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow, itemIndex);
                 return;
             }
         }
@@ -3483,9 +3511,8 @@ class LibraryPage extends Page {
         // scrolling, so scroll position determines grid window bounds and chunk loading.
         // ------------------------------------------------------------------
         if (scrollContainer && this._gridScrollTop !== null) {
-            // Guard: If a programmatic vertical scroll animation is still actively in flight
-            // from a previous D-pad move, ignore intermediate scroll events so we don't
-            // evict cards based on transient in-flight coordinates.
+            // Guard: If programmatic vertical scroll animation is actively in flight,
+            // ignore intermediate scroll events so we do not evict cards based on transient coordinates.
             if (scrollController.isVerticalAnimating && focusedElement && grid.contains(focusedElement)) {
                 this._gridScrollTop = null;
                 this._pendingScrollEval = false;
@@ -3498,7 +3525,7 @@ class LibraryPage extends Page {
 
             const containerHeight = scrollContainer.clientHeight;
             const scrollHeight = scrollContainer.scrollHeight;
-            const rowHeight = this.state.gridCardRowHeight;
+            const rowHeight = this.state.gridCardRowHeight || this._measureGridRowHeight(grid, currentColumns);
 
             // Direction tracking
             const isScrollingDown = scrollTop > (this._lastGridScrollTop || 0);
@@ -3523,6 +3550,20 @@ class LibraryPage extends Page {
             // Check prepend: if user is scrolling up OR near the top boundary of rendered items
             if ((isScrollingUp || distanceFromRenderedTop <= containerHeight) && this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
                 this._prependGridChunk(grid, this.state.items, currentColumns);
+            }
+
+            // Keep the focus-based direction cursor in sync so subsequent D-pad moves
+            // compare against the actual position after wheel scrolling
+            let focusedIndex = null;
+            if (focusedElement && grid.contains(focusedElement)) {
+                const allCards = grid.querySelectorAll('.media-card');
+                for (let i = 0; i < allCards.length; i++) {
+                    if (allCards[i] === focusedElement) {
+                        focusedIndex = this.state.gridWindowStart + i;
+                        this._lastFocusItemIndex = focusedIndex;
+                        break;
+                    }
+                }
             }
 
             if (rowHeight) {
@@ -3553,19 +3594,12 @@ class LibraryPage extends Page {
 
                 // Only sync window if the derived row is within actual content bounds
                 if (derivedRow <= maxRow) {
-                    this._syncGridWindow(grid, this.state.items, currentColumns, derivedRow);
-                }
-            }
-
-            // Keep the focus-based direction cursor in sync so subsequent D-pad moves
-            // compare against the actual position after wheel scrolling
-            if (focusedElement && grid.contains(focusedElement)) {
-                const allCards = grid.querySelectorAll('.media-card');
-                for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === focusedElement) {
-                        this._lastFocusItemIndex = this.state.gridWindowStart + i;
-                        break;
-                    }
+                    // Forward focused card index if navigating via D-pad so alphabet rail
+                    // maintains lock on focused card rather than reverting to the top row
+                    const targetIndexForSync = (!this._isManualScroll && focusedIndex !== null)
+                        ? focusedIndex
+                        : null;
+                    this._syncGridWindow(grid, this.state.items, currentColumns, derivedRow, targetIndexForSync);
                 }
             }
         }
@@ -3596,8 +3630,16 @@ class LibraryPage extends Page {
      * @param {number}      currentRow   - Current row index (0-based) in items[]
      * =========================================================================
      */
-    _syncGridWindow(grid, items, columns, currentRow) {
+    _syncGridWindow(grid, items, columns, currentRow, targetItemIndex = null) {
         if (!grid || !items || !columns) return;
+
+        /* -----------------------------------------------------------------
+         * Real-time Alphabet Rail Synchronization:
+         * Dynamically activates the corresponding letter button as the user
+         * navigates items or scrolls through rows in unlimited library mode.
+         * Passes explicit targetItemIndex when triggered by focused D-pad item.
+         * ----------------------------------------------------------------- */
+        this._updateAlphaPickerActiveLetter(currentRow, items, columns, targetItemIndex);
 
         // -----------------------------------------------------------------------
         // WINDOW CONSTANTS
@@ -4185,6 +4227,12 @@ class LibraryPage extends Page {
         // Scroll to top of content
         const scrollContainer = this.$('#library-scroll-container');
         if (scrollContainer) scrollContainer.scrollTop = 0;
+
+        // Automatically transfer focus to the first card matching this letter
+        const firstCard = this.$('#library-grid .media-card');
+        if (firstCard) {
+            focusManager.focusElement(firstCard);
+        }
     }
 
     /**
@@ -4212,16 +4260,17 @@ class LibraryPage extends Page {
         const allBtns = this.$('#alpha-picker')?.querySelectorAll('.alpha-btn');
         allBtns?.forEach((b) => b.classList.toggle('active', b.dataset.char === char));
 
-        const activeBtn = this.$(`.alpha-btn[data-char="${char}"]`);
-        if (activeBtn) {
-            focusManager.focusElement(activeBtn);
-        }
+        // Set target scroll letter lock so intermediate scroll events don't flicker the highlight
+        this._targetScrollLetter = char;
 
         const grid = this.$('#library-grid');
         const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
         if (!grid || !scrollContainer) return;
 
         const columns = this.state._gridColumns || 7;
+        const isListView = this.state.viewMode === 'list';
+        const ROWS_ABOVE = isListView ? 12 : 3;
+        const ROWS_BELOW = isListView ? 15 : 6;
 
         // ---------------------------------------------------------------------
         // STEP 1: Determine exact 0-based target index in the full library
@@ -4277,13 +4326,18 @@ class LibraryPage extends Page {
         }
 
         // ---------------------------------------------------------------------
-        // STEP 2: Fetch missing items up to targetIndex if needed
+        // STEP 2: Fetch missing items up to targetIndex + healthy forward buffer
         // ---------------------------------------------------------------------
-        if (targetIndex >= 0 && targetIndex >= this.state.items.length && this.state.items.length < (this.state.totalRecordCount || 0)) {
+        // When jumping to a letter, ensure we have at least 6-8 full rows loaded
+        // AFTER the target card so the viewport below it is fully populated with media.
+        const forwardBuffer = (ROWS_BELOW + 4) * columns;
+        const minItemsNeeded = targetIndex + forwardBuffer;
+
+        if (targetIndex >= 0 && this.state.items.length < minItemsNeeded && this.state.items.length < (this.state.totalRecordCount || 0)) {
             this._showInfiniteLoading(true);
             try {
                 const batchSize = this.state.limit || 100;
-                const needed = (targetIndex - this.state.items.length) + batchSize;
+                const needed = Math.max(batchSize, (minItemsNeeded - this.state.items.length) + batchSize);
                 const fetchedItems = await this._fetchItemsBatch(this.state.items.length, needed);
 
                 // Check again for newer letter request before modifying state
@@ -4321,15 +4375,11 @@ class LibraryPage extends Page {
         // STEP 3: Reconstruct virtual DOM window around target row
         // ---------------------------------------------------------------------
         const targetRow = Math.floor(targetIndex / columns);
-        const isListView = this.state.viewMode === 'list';
-        const ROWS_ABOVE = isListView ? 12 : 3;
-        const ROWS_BELOW = isListView ? 15 : 6;
-
         const idealStart = Math.max(0, (targetRow - ROWS_ABOVE) * columns);
         const idealEnd = Math.min(this.state.items.length, (targetRow + ROWS_BELOW + 1) * columns);
         const rowHeight = this.state.gridCardRowHeight || this._measureGridRowHeight(grid, columns) || 350;
 
-        if (targetIndex < this.state.gridWindowStart || targetIndex >= this.state.gridWindowEnd) {
+        if (this.state.gridWindowStart !== idealStart || this.state.gridWindowEnd < idealEnd) {
             const chunkItems = this.state.items.slice(idealStart, idealEnd);
             const spacerHeight = Math.floor(idealStart / columns) * rowHeight;
 
@@ -4345,27 +4395,136 @@ class LibraryPage extends Page {
         // STEP 4: Smoothly glide viewport to target position using exact DOM coordinates
         // ---------------------------------------------------------------------
         let targetScrollTop = 0;
-        if (targetRow > 0) {
-            const allCards = grid.querySelectorAll('.media-card');
-            const cardDomIndex = targetIndex - this.state.gridWindowStart;
-            const targetCard = (cardDomIndex >= 0 && cardDomIndex < allCards.length)
-                ? allCards[cardDomIndex]
-                : grid.querySelector(`.media-card[data-item-id="${this.state.items[targetIndex]?.Id}"]`);
 
-            if (targetCard) {
-                const cardRect = targetCard.getBoundingClientRect();
-                const containerRect = scrollContainer.getBoundingClientRect();
-                targetScrollTop = Math.max(0, Math.round(scrollContainer.scrollTop + (cardRect.top - containerRect.top) - 20));
-            } else {
-                const gridOffsetTop = grid.offsetTop || 0;
-                targetScrollTop = Math.max(0, Math.round(gridOffsetTop + (targetRow * rowHeight) - 20));
+        // Ensure bottom scroll clearance is active so any row can scroll fully to the top
+        if (this.state.isInfinite && grid.style.paddingBottom !== 'calc(100vh - 250px)') {
+            grid.style.paddingBottom = 'calc(100vh - 250px)';
+        }
+
+        // Query active cards rendered in the virtualized grid viewport
+        const allCards = grid.querySelectorAll('.media-card');
+        const cardDomIndex = targetIndex - this.state.gridWindowStart;
+
+        // Eagerly force-load posters for visible and upcoming cards (target row + forward buffer)
+        // so media appears instantly without waiting on IntersectionObserver
+        const visibleEnd = Math.min(allCards.length, Math.max(0, cardDomIndex) + (columns * 4));
+        for (let i = Math.max(0, cardDomIndex); i < visibleEnd; i++) {
+            const img = allCards[i].querySelector('img[data-src]');
+            if (img) lazyLoader.forceLoad(img);
+        }
+        lazyLoader.observe(grid);
+
+        // Resolve target card either by computed index offset or unique item identifier
+        let targetCard = (cardDomIndex >= 0 && cardDomIndex < allCards.length)
+            ? allCards[cardDomIndex]
+            : grid.querySelector(`.media-card[data-item-id="${this.state.items[targetIndex]?.Id}"]`);
+
+        // Millimeter-precise alignment: anchor the target card's row firmly at the top of the viewport
+        if (targetCard) {
+            const cardRect = targetCard.getBoundingClientRect();
+            const containerRect = scrollContainer.getBoundingClientRect();
+            // Position card top 20px below container top (clean margin for poster glow/shadow)
+            targetScrollTop = Math.max(0, Math.round(scrollContainer.scrollTop + (cardRect.top - containerRect.top) - 20));
+        } else {
+            // Robust fallback: traverse parent hierarchy to calculate exact grid top relative to scrollContainer
+            let gridTop = 0;
+            let el = grid;
+            while (el && el !== scrollContainer) {
+                gridTop += el.offsetTop || 0;
+                el = el.offsetParent;
+            }
+            targetScrollTop = Math.max(0, Math.round(gridTop + (targetRow * rowHeight) - 20));
+            if (allCards.length > 0) {
+                targetCard = allCards[0];
             }
         }
 
+        // Cache last known positions for spatial focus tracking
         this._lastGridScrollTop = targetScrollTop;
         this._lastFocusItemIndex = targetIndex;
 
+        // Execute smooth fluid scroll animation to target offset
         scrollController.smoothScrollTo(scrollContainer, targetScrollTop, 250, 'vertical');
+
+        /* -----------------------------------------------------------------
+         * Direct Focus Hand-off:
+         * Immediately focuses the target card with skipScroll: true so the
+         * fluid scroll animation glides seamlessly while giving the
+         * user immediate D-pad and action control over the item.
+         * ----------------------------------------------------------------- */
+        if (targetCard) {
+            focusManager.focusElement(targetCard, { skipScroll: true });
+        }
+    }
+
+    /**
+     * =========================================================================
+     * UPDATE ALPHA PICKER ACTIVE LETTER ON SCROLL
+     * =========================================================================
+     * Dynamically synchronizes the active highlighted letter button on the
+     * alphabet selector rail as the user scrolls through the full library in
+     * unlimited mode. Follows Apple HIG for real-time positional scrubbing.
+     *
+     * @param {number} currentRow - 0-based row index currently at viewport top
+     * @param {Array} items - Full items array
+     * @param {number} columns - Grid column count
+     * =========================================================================
+     */
+    _updateAlphaPickerActiveLetter(currentRow, items, columns, targetItemIndex = null) {
+        // Only active in unlimited mode with alpha scroll mode enabled
+        const isScrollMode = this.state.isInfinite && storage.getItem('pref:alphaPickerScrollMode') !== 'false';
+        if (!isScrollMode || !items || !items.length) return;
+
+        // If a programmatic smooth scroll jump is currently in flight, keep the targeted letter locked
+        if (scrollController.isVerticalAnimating && this._targetScrollLetter) {
+            return;
+        }
+        this._targetScrollLetter = null;
+
+        // Resolve item: prefer explicit item index if provided (e.g. active D-pad focus cursor)
+        let item = null;
+        if (targetItemIndex !== null && targetItemIndex >= 0 && targetItemIndex < items.length) {
+            item = items[targetItemIndex];
+        } else {
+            // Check if user is navigating with D-pad and currently has a card focused
+            const focused = focusManager.getFocused() || this._gridFocusElement;
+            const grid = this.$('#library-grid');
+            if (!this._isManualScroll && focused && grid && grid.contains(focused) && focused.classList.contains('media-card')) {
+                // Determine item from focused card
+                if (this._lastFocusItemIndex !== null && this._lastFocusItemIndex >= 0 && this._lastFocusItemIndex < items.length) {
+                    item = items[this._lastFocusItemIndex];
+                } else {
+                    const itemId = focused.dataset?.itemId;
+                    if (itemId) {
+                        item = items.find((it) => it.Id === itemId);
+                    }
+                }
+            }
+
+            // Fallback for manual scrolling (mouse wheel, magic remote, touch fling, or focus outside grid):
+            // resolve first item on or near current visible row
+            if (!item) {
+                const itemIndex = Math.min(items.length - 1, Math.max(0, currentRow * columns));
+                item = items[itemIndex];
+            }
+        }
+        if (!item) return;
+
+        // Extract normalized letter
+        let char = this._getItemSortChar(item);
+        if (!char || char < 'A' || char > 'Z') {
+            char = '#';
+        }
+
+        // Only update DOM when the active letter actually changes
+        if (this.state.scrollAlphaChar !== char) {
+            this.state.scrollAlphaChar = char;
+            const picker = this.$('#alpha-picker');
+            if (picker) {
+                const allBtns = picker.querySelectorAll('.alpha-btn');
+                allBtns.forEach((b) => b.classList.toggle('active', b.dataset.char === char));
+            }
+        }
     }
 
     /**
