@@ -14,6 +14,8 @@ Litefin is an open-source Tizen and webOS Client for Jellyfin written from scrat
 
 Enable more features by installing the [**Litefin Plugin**](https://github.com/MoazSalem/litefin-plugin) on your Jellyfin server as well.
 
+<img width="1920" height="1080" alt="Screenshot 2026-09-30 194946" src="https://github.com/user-attachments/assets/6ef405e1-e530-4b1e-a747-2a681576e827" />
+
 ## Features
 
 - **Fast Native Performance**: Built in pure vanilla JavaScript with zero heavy framework overhead, custom virtualized scrolling (`VirtualCardRow`, `VirtualGrid`), and aggressive DOM recycling tailored for low-RAM TV hardware.
@@ -181,6 +183,15 @@ If Litefin is useful to you, please consider supporting the development:
           <img src="https://github.com/d-stl.png?s=100" width="80" alt="d-stl" />
           <br />
           <b>domantas</b>
+        </a>
+      </td>
+     </tr>
+     <tr>
+       <td align="center" width="160">
+        <a href="https://github.com/TheColin21">
+          <img src="https://github.com/TheColin21.png?s=100" width="80" alt="TheColin21" />
+          <br />
+          <b>Colin P</b>
         </a>
       </td>
      </tr>
