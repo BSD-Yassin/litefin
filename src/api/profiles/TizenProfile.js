@@ -327,7 +327,8 @@ export function buildJellyfinProfile(options = {}) {
     if (supportsMpeg2Video) generalVideoCodecs.push('mpeg2video');
     if (caps.vc1) generalVideoCodecs.push('vc1');
     if (caps.rv) generalVideoCodecs.push('realvideo');
-    if (enableHEVC) generalVideoCodecs.push('hevc');
+    // Ensure both 'hevc' and 'h265' aliases are advertised to match all server probe representations
+    if (enableHEVC) generalVideoCodecs.push('hevc', 'h265');
     if (enableVP9) generalVideoCodecs.push('vp9');
     if (caps.vp8) generalVideoCodecs.push('vp8');
     if (enableAV1) generalVideoCodecs.push('av1');
@@ -342,12 +343,14 @@ export function buildJellyfinProfile(options = {}) {
     const tsVideoCodecs = ['h264'];
     if (supportsMpeg2Video) tsVideoCodecs.push('mpeg2video');
     if (caps.vc1) tsVideoCodecs.push('vc1');
-    if (enableHEVC) tsVideoCodecs.push('hevc');
+    if (enableHEVC) tsVideoCodecs.push('hevc', 'h265');
     if (enableAV1) tsVideoCodecs.push('av1');
 
     const m2tsVideoCodecs = ['h264'];
     if (supportsMpeg2Video) m2tsVideoCodecs.push('mpeg2video');
     if (caps.vc1) m2tsVideoCodecs.push('vc1');
+    // M2TS containers for 4K UHD and broadcast transport streams support HEVC natively
+    if (enableHEVC) m2tsVideoCodecs.push('hevc', 'h265');
 
     const directPlayProfiles = [];
 
@@ -603,7 +606,7 @@ export function buildJellyfinProfile(options = {}) {
     // All Samsung Smart TVs with HEVC hardware decoding (Tizen 2.4/3.0/4.0/5.0+) natively demux
     // and decode HEVC streams carried over HLS MPEG-TS segments (stream_type 0x24).
     // =========================================================================
-    if (enableHEVC) tsCompatibleVideoCodecs.push('hevc');
+    if (enableHEVC) tsCompatibleVideoCodecs.push('hevc', 'h265');
 
     // TS-compatible list (AV1/VP9 intentionally excluded — not muxable into MPEG-TS)
     let transVideoCodecs = tsCompatibleVideoCodecs.join(',');
@@ -622,12 +625,12 @@ export function buildJellyfinProfile(options = {}) {
     // So we explicitly list only H264 and HEVC (always fMP4-safe), plus AV1/VP9
     // when enabled. mpeg2video/vc1 fall back to the TS HLS profile instead.
     const fmp4CompatibleVideoCodecs = ['h264'];
-    if (enableHEVC) fmp4CompatibleVideoCodecs.push('hevc');
+    if (enableHEVC) fmp4CompatibleVideoCodecs.push('hevc', 'h265');
     if (enableAV1) fmp4CompatibleVideoCodecs.push('av1');
     if (enableVP9) fmp4CompatibleVideoCodecs.push('vp9');
     const fmp4TransVideoCodecs = fmp4CompatibleVideoCodecs.join(',');
 
-    let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    let directVideoCodecs = enableHEVC ? 'h264,hevc,h265' : 'h264';
 
     if (playbackMode === 'remux') {
         // ──────────────────────────────────────────────────────────────────────
@@ -799,21 +802,12 @@ export function buildJellyfinProfile(options = {}) {
     const h264Level = caps.uhd ? '51' : '42'; // Spec sheets note: FHD models support Level 4.2
 
     // HEVC Level limits based on specs:
-    //   - FHD (caps.uhd is false) -> Level 4.1 (123)
-    //   - UHD & Tizen < 5.5 (2015-2019) -> Level 5.1 (153)
-    //   - UHD & Tizen >= 5.5 (2020+) -> Level 5.2 (156)
-    //   - 8K & Tizen >= 5.0 (2019+) -> Level 6.1 (183)
-    let hevcLevel = '153'; // Default to Level 5.1
-    if (caps.uhd8K && caps.tizenVersion >= 5.0) {
-        hevcLevel = '183'; // Level 6.1
-    } else if (caps.uhd) {
-        if (caps.tizenVersion >= 5.5) {
-            hevcLevel = '156'; // Level 5.2
-        } else {
-            hevcLevel = '153'; // Level 5.1
-        }
-    } else {
-        hevcLevel = '123'; // Level 4.1 for FHD models
+    // FHD (caps.uhd is false) -> Level 4.1 (123)
+    // UHD (caps.uhd or caps.uhd8K) -> Level 6.1 (183) across all UHD Samsung TV hardware (aligns with WebProfile).
+    // Broadcasters frequently encode 4K 50p/60p streams at Level 5.2 (156) or Level 6.0/6.1.
+    let hevcLevel = '123';
+    if (caps.uhd || caps.uhd8K) {
+        hevcLevel = '183';
     }
 
     const hdrCondition = !enableHDR
@@ -835,8 +829,12 @@ export function buildJellyfinProfile(options = {}) {
     // we tell the server that we only support playing the base compatibility layer. The server
     // will copy the HEVC video stream but tag it as standard HEVC 'hvc1' without the DV boxes,
     // which plays perfectly on Tizen (exactly as it does in the official client).
+    //
+    // Ensure generic 'HDR' is included alongside specific formats (HDR10, HLG, etc.)
+    // because Jellyfin frequently flags HLG broadcasts and uncalibrated HDR streams
+    // with VideoRangeType: 'HDR'.
     const hevcVideoRangeTypes = enableHDR
-        ? 'SDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus|DOVIInvalid'
+        ? 'SDR|HDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus|DOVIInvalid'
         : 'SDR|DOVIWithSDR';
 
     const codecProfiles = [
@@ -918,24 +916,22 @@ export function buildJellyfinProfile(options = {}) {
             ]
         },
         // -----------------------------------------------------------------------
-        // Block interlaced TS/MPEGTS from DirectPlay.
+        // Block interlaced TS/MPEGTS from DirectPlay for H.264 and MPEG-2.
         //
         // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
         // interlaced H.264. When we include ts/mpegts in DirectPlayProfiles,
         // the server evaluates these CodecProfile conditions to determine if
         // DirectPlay is actually viable.
         //
-        // Without this, Jellyfin opens a 'heavy_' pre-transcode session, then
-        // fails at runtime with DirectPlayError — causing FFmpeg to crash.
-        // With this, the server issues ContainerNotSupported immediately and
-        // opens a 'native_' capture + HLS transcode pipeline, which is exactly
-        // what jellyfin-web does and what works correctly.
+        // Explicitly scoping to h264 and mpeg2video ensures that progressive HEVC
+        // 4K broadcasts (e.g. DVB UHD) are not blocked from DirectPlay by this check.
         // -----------------------------------------------------------------------
         ...(!isHtml5
             ? [
                   {
                       Type: 'Video',
                       Container: 'ts,mpegts',
+                      Codec: 'h264,mpeg2video',
                       Conditions: [
                           {
                               Condition: 'Equals',
@@ -1043,9 +1039,14 @@ export function buildJellyfinProfile(options = {}) {
     if (enableHEVC) {
         codecProfiles.push({
             Type: 'Video',
-            Codec: 'hevc',
+            Codec: 'hevc,h265',
             Conditions: [
-                { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: 'main|main 10|main 10@*|high|main 10 high|main 10 still picture',
+                    IsRequired: false
+                },
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoRangeType',
