@@ -758,7 +758,13 @@ class App {
                     try {
                         let startPosition = 0;
                         if (resume && itemToPlay.UserData?.PlaybackPositionTicks) {
-                            startPosition = itemToPlay.UserData.PlaybackPositionTicks;
+                            /*
+                             * Apply configured resume rewind offset so that all group participants
+                             * start with the same contextual scene rewind when resuming.
+                             */
+                            startPosition = PlayerSettings.getAdjustedResumePositionTicks(
+                                itemToPlay.UserData.PlaybackPositionTicks
+                            );
                         }
                         await api.post('/SyncPlay/SetNewQueue', {
                             PlayingQueue: [itemToPlay.Id],

@@ -968,7 +968,7 @@ progress.card-progress::-webkit-progress-value {
 
 /* Redesigned Danger Button for Destructive Modal Actions (e.g. Exit, Delete) */
 .modal-action-btn.danger-btn {
-    background: rgba(255, 59, 48, 0.15); /* Translucent Apple Red */
+    background: rgba(255, 59, 48, 0.15); /* Translucent Red */
     color: #ff3b30;
     border: 2px solid rgba(255, 59, 48, 0.3);
 }

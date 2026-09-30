@@ -186,7 +186,7 @@ html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-colla
  * ── Always Collapsed Mode Text Suppression ────────────────────────────────
  * Enforces total concealment of text labels, subtitles, and section headers
  * across all states (default, hovered, expanded) in Always Collapsed mode.
- * Apple HIG requires clean, uncluttered visual rhythm in compact viewports.
+ * Enforces a clean, uncluttered visual rhythm in compact viewports.
  */
 body.sidebar-mode-collapsed .sidebar .logo-text,
 body.sidebar-mode-collapsed .sidebar .item-text,
@@ -908,7 +908,7 @@ html:not([data-layout-sidebar^="modern"]):not([data-layout-sidebar="floating-but
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: #32D74B; /* Apple green */
+    background: #32D74B; /* Accent green */
     border: 2px solid var(--sidebar-bg, #101010); /* Knockout border to sit above bg */
     opacity: 0;
     -webkit-transform: scale(0.9);

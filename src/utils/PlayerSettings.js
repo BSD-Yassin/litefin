@@ -472,6 +472,17 @@ const DEFAULTS = {
     // Skip back duration in milliseconds (defaults to 10 seconds)
     skipBackLength: 10000,
 
+    /*
+     * Resume Rewind Offset (in milliseconds)
+     * -------------------------------------------------------------------------
+     * When resuming playback of an in-progress video, rewinds by this amount
+     * (e.g. 5 seconds or 10 seconds) to provide context and refresh the viewer's
+     * memory of the scene before picking up where they left off.
+     * Set to 0 to disable rewind and resume at the exact recorded timestamp.
+     * Default: 0 (disabled).
+     */
+    resumeRewindLength: 0,
+
     // Auto-play next episode when current finishes
     enableNextEpisodeAutoPlay: true,
 
@@ -808,6 +819,44 @@ export const PlayerSettings = {
      */
     getDefaults() {
         return { ...DEFAULTS };
+    },
+
+    /**
+     * Calculate adjusted resume position in ticks, applying the configured rewind offset.
+     *
+     * In-progress playback sessions store the exact pause position in 100-nanosecond ticks.
+     * When resuming, users often benefit from reviewing a brief window (e.g., 5s or 10s)
+     * prior to the pause point to remember the scene context without missing anything.
+     *
+     * @param {number} positionTicks - The raw recorded playback position in 100-ns ticks
+     * @returns {number} The rewind-adjusted position in ticks (guaranteed >= 0)
+     */
+    getAdjustedResumePositionTicks(positionTicks) {
+        // Guard against missing, invalid, or non-positive playback positions
+        if (!positionTicks || typeof positionTicks !== 'number' || positionTicks <= 0) {
+            return 0;
+        }
+
+        // Retrieve configured rewind offset (stored in milliseconds, 0 = disabled)
+        const rewindLengthMs = this.get('resumeRewindLength') || 0;
+        if (!rewindLengthMs || rewindLengthMs <= 0) {
+            return positionTicks;
+        }
+
+        // Convert milliseconds to Jellyfin 100-ns ticks:
+        // 1 second = 1,000 milliseconds = 10,000,000 ticks.
+        // Therefore, 1 millisecond = 10,000 ticks.
+        const rewindTicks = rewindLengthMs * 10000;
+
+        // Subtract rewind offset while strictly clamping to 0 (cannot rewind before start of media)
+        const adjustedTicks = Math.max(0, positionTicks - rewindTicks);
+
+        log.debug(
+            `[ResumeRewind] Applied offset of ${rewindLengthMs}ms (${rewindTicks} ticks): ` +
+            `raw=${positionTicks} -> adjusted=${adjustedTicks}`
+        );
+
+        return adjustedTicks;
     }
 };
 

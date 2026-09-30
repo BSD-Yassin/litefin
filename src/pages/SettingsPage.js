@@ -3247,6 +3247,8 @@ class SettingsPage extends Page {
         const currentBackend = PlayerSettings.get('playerBackend') || 'auto';
         const skipForward = PlayerSettings.get('skipForwardLength') || 30000;
         const skipBack = PlayerSettings.get('skipBackLength') || 10000;
+        // Resume rewind setting: 0 = disabled (None), 5000 = 5s, 10000 = 10s, etc.
+        const resumeRewind = PlayerSettings.get('resumeRewindLength') || 0;
         const currentAudioNormalization = PlayerSettings.get('audioNormalization') || 'TrackGain';
 
         const caps = getDeviceCapabilities();
@@ -3486,6 +3488,28 @@ class SettingsPage extends Page {
                     { value: 60000, label: i18n.t('Seconds', ['60']) }
                 ],
                 skipBack
+            )}
+                    </div>
+                </div>
+
+                <!-- Resume Rewind Offset (Recap previous seconds upon resuming) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelResumeRewindLength">${i18n.t('LabelResumeRewindLength') || 'Resume rewind'}</span>
+                        <span class="setting-description" data-i18n="ResumeRewindDurationDescription">${i18n.t('ResumeRewindDurationDescription') || 'Rewind playback slightly when resuming an in-progress video to review the previous scene.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'resume-rewind-select',
+                [
+                    { value: 0, label: i18n.t('None') || 'None' },
+                    { value: 5000, label: i18n.t('Seconds', ['5']) },
+                    { value: 10000, label: i18n.t('Seconds', ['10']) },
+                    { value: 15000, label: i18n.t('Seconds', ['15']) },
+                    { value: 20000, label: i18n.t('Seconds', ['20']) },
+                    { value: 30000, label: i18n.t('Seconds', ['30']) }
+                ],
+                resumeRewind
             )}
                     </div>
                 </div>
@@ -9707,6 +9731,7 @@ class SettingsPage extends Page {
             'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },
             'skip-forward-select': { key: 'skipForwardLength', type: 'player' },
             'skip-back-select': { key: 'skipBackLength', type: 'player' },
+            'resume-rewind-select': { key: 'resumeRewindLength', type: 'player' },
             'subtitle-mode-select': { key: 'subtitleMode', type: 'player' },
             // Subtitle delivery mode — drives SubtitleProfiles in DeviceProfile
             'subtitle-burn-in-select': { key: 'subtitleBurnIn', type: 'player' },
@@ -10166,6 +10191,7 @@ class SettingsPage extends Page {
                             const intKeys = [
                                 'skipForwardLength',
                                 'skipBackLength',
+                                'resumeRewindLength',
                                 'maxBitrateInternet',
                                 'webosStallRecovery',
                                 'webosSegmentLength',

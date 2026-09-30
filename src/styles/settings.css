@@ -536,7 +536,7 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 .switch-user-btn.focused,
 .switch-user-btn:hover {
     background: var(--jf-error, #ff3b30);
-    /* Apple Red / Theme Error */
+    /* Theme Error Red */
     border-color: var(--jf-button-border-focus) !important;
     will-change: transform;
 }

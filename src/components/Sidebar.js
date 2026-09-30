@@ -1184,7 +1184,7 @@ class Sidebar extends Component {
              * =================================================================
              * POPOVER VERTICAL ALIGNMENT BESIDE LIBRARIES BUTTON
              * =================================================================
-             * Follows Apple Human Interface Guidelines:
+             * Popover Positioning & Viewport Clamping:
              * - Accurately aligns the popover directly adjacent to the anchor icon
              * - Measures against the actual offsetParent to prevent double offsets
              * - Clamps top offset within screen viewport bounds for TV safe areas

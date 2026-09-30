@@ -2521,7 +2521,7 @@ class LibraryPage extends Page {
         /* -----------------------------------------------------------------
          * Active Alphabet Highlight:
          * Uses scrollAlphaChar in unlimited scroll mode, or nameStartsWith in
-         * standard filtering mode, following Apple HIG for immediate visual feedback.
+         * standard filtering mode, providing immediate visual feedback.
          * ----------------------------------------------------------------- */
         const isScrollModeActive = this.state.isInfinite && storage.getItem('pref:alphaPickerScrollMode') !== 'false';
         const activeChar = isScrollModeActive ? (this.state.scrollAlphaChar || this.state.nameStartsWith) : this.state.nameStartsWith;
@@ -4484,7 +4484,7 @@ class LibraryPage extends Page {
      * =========================================================================
      * Dynamically synchronizes the active highlighted letter button on the
      * alphabet selector rail as the user scrolls through the full library in
-     * unlimited mode. Follows Apple HIG for real-time positional scrubbing.
+     * unlimited mode for real-time positional scrubbing.
      *
      * @param {number} currentRow - 0-based row index currently at viewport top
      * @param {Array} items - Full items array

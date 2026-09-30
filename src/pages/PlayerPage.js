@@ -408,11 +408,18 @@ class PlayerPage extends Page {
 
             // Calculate resume position if needed
             if (startPositionTicks !== null && !isNaN(startPositionTicks)) {
-                // If an explicit position was passed via URL (e.g. from SyncPlay)
+                // If an explicit position was passed via URL (e.g. from SyncPlay), preserve it exactly
                 this._resumePosition = startPositionTicks;
             } else if (resume && this._item.UserData?.PlaybackPositionTicks) {
-                // Otherwise fallback to UserData if resume was requested
-                this._resumePosition = this._item.UserData.PlaybackPositionTicks;
+                /*
+                 * User requested to resume playback. We pass the stored playback ticks
+                 * through PlayerSettings.getAdjustedResumePositionTicks() to apply any
+                 * user-configured rewind offset (e.g. 5 or 10 seconds), ensuring they don't
+                 * miss vital context and can remember where they left off.
+                 */
+                this._resumePosition = PlayerSettings.getAdjustedResumePositionTicks(
+                    this._item.UserData.PlaybackPositionTicks
+                );
             }
 
             // Initialize the player

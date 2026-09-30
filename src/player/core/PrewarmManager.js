@@ -161,12 +161,19 @@ export class PrewarmManager {
 
             // Clone profile to prevent accidental external mutations
             const clonedProfile = JSON.parse(JSON.stringify(deviceProfile));
-            // Assemble base PlaybackInfo request payload
+            // Assemble base PlaybackInfo request payload.
+            // If the item has saved progress, align the prewarm StartTimeTicks with the
+            // configured resume rewind offset so transcoded playback aligns perfectly.
+            const rawResumeTicks = item.UserData?.PlaybackPositionTicks || 0;
+            const defaultStartTicks = rawResumeTicks > 0
+                ? PlayerSettings.getAdjustedResumePositionTicks(rawResumeTicks)
+                : 0;
+
             const requestBody = {
                 DeviceProfile: clonedProfile,
                 UserId: api.userId,
                 MaxStreamingBitrate: manualBitrate,
-                StartTimeTicks: prewarmOptions.startPositionTicks ?? (item.UserData?.PlaybackPositionTicks || 0),
+                StartTimeTicks: prewarmOptions.startPositionTicks ?? defaultStartTicks,
                 AutoOpenLiveStream: true,
                 IsPlayback: true,
                 EnableDirectPlay: true,

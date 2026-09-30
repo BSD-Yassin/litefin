@@ -327,7 +327,7 @@ export default {
         const targetRow = techRow || metaRow;
         targetRow.insertAdjacentHTML('afterend', html);
 
-        // Add subtle entrance animation with Apple HIG spring curve
+        // Add subtle entrance animation with spring curve
         requestAnimationFrame(() => {
             const row = pageEl.querySelector('.mdblist-ratings-row');
             if (row) {

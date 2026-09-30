@@ -1536,7 +1536,7 @@ html[data-layout-sidebar="floating-island"] .floating-island-pill {
     position: absolute !important;
     left: 268px !important;
     width: 64px !important;
-    /* Apple glassmorphism visual styling */
+    /* Glassmorphism visual styling */
     background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
     border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
     border-radius: 36px !important;
@@ -1545,7 +1545,7 @@ html[data-layout-sidebar="floating-island"] .floating-island-pill {
     box-shadow: none !important;
     -webkit-backdrop-filter: blur(20px) !important;
     backdrop-filter: blur(20px) !important;
-    /* Smooth Apple spring/cubic-bezier transition when resizing or re-centering */
+    /* Smooth spring/cubic-bezier transition when resizing or re-centering */
     transition: top 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
