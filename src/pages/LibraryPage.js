@@ -1333,7 +1333,8 @@ class LibraryPage extends Page {
                 Recursive: true,
                 Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds,SortName',
                 ImageTypeLimit: 1,
-                EnableImageTypes: 'Primary,Backdrop,Thumb'
+                EnableImageTypes: 'Primary,Backdrop,Thumb',
+                EnableTotalRecordCount: true
             };
 
             // Store active query context for infinite scroll batch fetching
@@ -2873,6 +2874,7 @@ class LibraryPage extends Page {
         // Reset the sliding window — a fresh _renderGrid always starts from zero
         this.state.gridWindowStart = 0;
         this.state.gridWindowEnd = 0;
+        this.state._hasMoreInfinite = true;
         this.state.gridCardRowHeight = null; // Force re-measure on next append
 
         // Reset direction cursors so stale positions from a previous page render
@@ -3014,8 +3016,6 @@ class LibraryPage extends Page {
 
                 // Guard for DOWN navigation on the last rendered row
                 if (direction === 'down') {
-                    if (this.state.gridWindowEnd >= this.state.items.length) return false;
-
                     const allCards = grid.querySelectorAll('.media-card');
                     let domIndex = -1;
                     for (let i = 0; i < allCards.length; i++) {
@@ -3024,9 +3024,17 @@ class LibraryPage extends Page {
                             break;
                         }
                     }
-                    // If domIndex + currentColumns >= allCards.length, focus is on the last rendered row
+                    // If focus is on the last rendered row, append next chunk or trigger infinite batch
                     if (domIndex >= 0 && domIndex + currentColumns >= allCards.length) {
-                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                        if (this.state.gridWindowEnd < this.state.items.length) {
+                            this._appendGridChunk(grid, this.state.items, currentColumns);
+                        } else if (this.state.isInfinite) {
+                            const hasMore = this.state._hasMoreInfinite !== false &&
+                                (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
+                            if (hasMore) {
+                                this._loadNextInfiniteBatch();
+                            }
+                        }
                     }
                     return false;
                 }
@@ -3233,10 +3241,16 @@ class LibraryPage extends Page {
     _hookGridCards(newCards) {
         if (!newCards || !newCards.length) return;
 
-        newCards.forEach((card) => {
+        newCards.forEach((card, index) => {
             const img = card.querySelector('img[data-src]');
             if (img) {
-                lazyLoader.observeElement(img);
+                // Eagerly force-load the first 14 images of any newly appended chunk (2 full rows)
+                // so they appear immediately without waiting on IntersectionObserver
+                if (index < 14) {
+                    lazyLoader.forceLoad(img);
+                } else {
+                    lazyLoader.observeElement(img);
+                }
             }
             const shimmer = card.querySelector('.card-image.skeleton-shimmer');
             if (shimmer && lazyLoader._shimmerObserver) {
@@ -3492,7 +3506,9 @@ class LibraryPage extends Page {
 
                 // Proactively stream next batch when approaching end of loaded array (works on both moves & letter jumps)
                 const prefetchThreshold = this.state.items.length - (currentColumns * 4);
-                if (this.state.isInfinite && itemIndex >= prefetchThreshold && this.state.items.length < this.state.totalRecordCount) {
+                const hasMore = this.state._hasMoreInfinite !== false &&
+                    (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
+                if (this.state.isInfinite && itemIndex >= prefetchThreshold && hasMore) {
                     this._loadNextInfiniteBatch();
                 }
 
@@ -3539,10 +3555,15 @@ class LibraryPage extends Page {
             const distanceFromRenderedTop = scrollTop - spacerHeight;
 
             // Check append: if user is scrolling down OR near the bottom boundary of rendered items
+            const hasMoreToFetch = this.state._hasMoreInfinite !== false &&
+                (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
+
             if ((isScrollingDown || distanceFromBottom <= containerHeight) && distanceFromBottom <= containerHeight * 1.5) {
                 if (this.state.gridWindowEnd < this.state.items.length) {
                     this._appendGridChunk(grid, this.state.items, currentColumns);
-                } else if (this.state.isInfinite && this.state.items.length < this.state.totalRecordCount) {
+                }
+                // Proactively stream next batch when within 4 rows of loaded array boundary during scroll
+                if (this.state.isInfinite && (this.state.items.length - this.state.gridWindowEnd < currentColumns * 4) && hasMoreToFetch) {
                     this._loadNextInfiniteBatch();
                 }
             }
@@ -4640,7 +4661,8 @@ class LibraryPage extends Page {
         const batchParams = {
             ...ctx.params,
             StartIndex: startIndex,
-            Limit: limit
+            Limit: limit,
+            EnableTotalRecordCount: true
         };
 
         let result = null;
@@ -4651,6 +4673,10 @@ class LibraryPage extends Page {
                 result = await api.getMusicArtists(batchParams);
             } else {
                 result = await api.getItems(batchParams);
+            }
+
+            if (result && typeof result.TotalRecordCount === 'number' && result.TotalRecordCount > 0) {
+                this.state.totalRecordCount = result.TotalRecordCount;
             }
         } catch (err) {
             log.warn('Failed to load next items batch', err);
@@ -4672,6 +4698,7 @@ class LibraryPage extends Page {
     async _loadNextInfiniteBatch() {
         if (this._isLoadingMore || this._isDestroyed) return;
         if (!this.state.isInfinite) return;
+        if (this.state._hasMoreInfinite === false) return;
         if (this.state.totalRecordCount > 0 && this.state.items.length >= this.state.totalRecordCount) return;
 
         this._isLoadingMore = true;
@@ -4682,25 +4709,32 @@ class LibraryPage extends Page {
             const batchSize = this.state.limit || 100;
             const nextItems = await this._fetchItemsBatch(startIndex, batchSize);
 
-            if (!this._isDestroyed && nextItems && nextItems.length > 0) {
-                this.state.items = this.state.items.concat(nextItems);
-
-                const collectionType = this.state.libraryInfo?.CollectionType;
-                if ((collectionType === 'playlists' || collectionType === 'boxsets') && nextItems.length > 0) {
-                    await this._enrichCollectionItems(nextItems, collectionType);
+            if (!this._isDestroyed) {
+                // If fewer items than batchSize returned, we have reached the end of the collection
+                if (!nextItems || nextItems.length < batchSize) {
+                    this.state._hasMoreInfinite = false;
                 }
 
-                const grid = this.$('#library-grid');
-                if (grid) {
-                    const columns = this.state._gridColumns || 7;
-                    this._appendGridChunk(grid, this.state.items, columns);
-                    focusManager.invalidateCache('library-grid');
-                }
+                if (nextItems && nextItems.length > 0) {
+                    this.state.items = this.state.items.concat(nextItems);
 
-                const countIndicator = this.$('#count-indicator');
-                if (countIndicator) {
-                    const total = this.state.totalRecordCount || this.state.items.length;
-                    countIndicator.textContent = i18n.t('ListPaging', [1, this.state.items.length, total]);
+                    const collectionType = this.state.libraryInfo?.CollectionType;
+                    if ((collectionType === 'playlists' || collectionType === 'boxsets') && nextItems.length > 0) {
+                        await this._enrichCollectionItems(nextItems, collectionType);
+                    }
+
+                    const grid = this.$('#library-grid');
+                    if (grid) {
+                        const columns = this.state._gridColumns || 7;
+                        this._appendGridChunk(grid, this.state.items, columns);
+                        focusManager.invalidateCache('library-grid');
+                    }
+
+                    const countIndicator = this.$('#count-indicator');
+                    if (countIndicator) {
+                        const total = this.state.totalRecordCount || this.state.items.length;
+                        countIndicator.textContent = i18n.t('ListPaging', [1, this.state.items.length, total]);
+                    }
                 }
             }
         } catch (err) {
