@@ -243,9 +243,15 @@ export const MediaHelper = {
         const { isVideoDirect, isAudioDirect } = this.getTranscodeStatus(mediaSource);
 
         if (isVideoDirect && isAudioDirect) {
-            // Both streams are direct. If it's the original file, it's DirectPlay.
-            // If it's being repackaged (DirectStream), we call it Remux.
-            return mediaSource.SupportsDirectPlay ? 'DirectPlay' : 'Remux';
+            // Both streams are direct.
+            // If the server provides no TranscodingUrl (original file or raw live stream direct passthrough),
+            // or explicitly signals SupportsDirectPlay, it is DirectPlay.
+            // Only when an active TranscodingUrl is generated for container repackaging (HLS/TS stream copy)
+            // is it considered a server-side Remux.
+            if (!mediaSource.TranscodingUrl || mediaSource.SupportsDirectPlay) {
+                return 'DirectPlay';
+            }
+            return 'Remux';
         }
 
         if (isVideoDirect) {

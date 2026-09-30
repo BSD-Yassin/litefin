@@ -1647,7 +1647,17 @@ export class JellyfinPlayer extends EventEmitter {
                 PlayerSettings.get('interlacedBackendFallback') &&
                 !options._interlacedFallbackAttempted
             ) {
-                const isInterlaced = videoStream && videoStream.IsInterlaced === true;
+                // Validate interlaced flag against actual stream geometry:
+                // 1. Must be flagged IsInterlaced by Jellyfin.
+                // 2. Must have verified dimensions (avoid false positives on unprobed live streams).
+                // 3. 4K UHD broadcasts (>= 2160p) are strictly progressive by standard, so never fallback 4K.
+                const isInterlaced = Boolean(
+                    videoStream &&
+                    videoStream.IsInterlaced === true &&
+                    videoStream.Width &&
+                    videoStream.Height &&
+                    videoStream.Height <= 1080
+                );
                 if (isInterlaced) {
                     log.info(
                         `[InterlacedFallback] Interlaced video detected (${videoStream.Width}x${videoStream.Height}i). ` +

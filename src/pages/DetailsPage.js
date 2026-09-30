@@ -2940,7 +2940,10 @@ class DetailsPage extends Page {
             ${techHtml}
         `;
 
-        this.$('#hero-info').innerHTML = heroHtml;
+        const heroInfoContainer = this.$('#hero-info');
+        if (heroInfoContainer) {
+            heroInfoContainer.innerHTML = heroHtml;
+        }
 
         // Bind clickable subtitle if present
         const subtitleLink = this.$('#episode-subtitle-link');

@@ -2176,6 +2176,7 @@ export default class OSDController extends Component {
                         focusedEl.closest('.plugin-widget.visible') ||
                         focusedEl.closest('.upnext-dialog.visible') ||
                         focusedEl.closest('.osd-offset-popup.visible') ||
+                        focusedEl.closest('.playback-info-overlay.visible') ||
                         focusedEl.closest('.playback-info-popup.visible')
                     )) {
                         focusedEl.click();
@@ -2260,6 +2261,7 @@ export default class OSDController extends Component {
                     focusedEl.closest('.plugin-widget.visible') ||
                     focusedEl.closest('.upnext-dialog.visible') ||
                     focusedEl.closest('.osd-offset-popup.visible') ||
+                    focusedEl.closest('.playback-info-overlay.visible') ||
                     focusedEl.closest('.playback-info-popup.visible')
                 )) {
                     focusedEl.click();
@@ -2370,6 +2372,7 @@ export default class OSDController extends Component {
                         focusedEl.closest('.plugin-widget.visible') ||
                         focusedEl.closest('.upnext-dialog.visible') ||
                         focusedEl.closest('.osd-offset-popup.visible') ||
+                        focusedEl.closest('.playback-info-overlay.visible') ||
                         focusedEl.closest('.playback-info-popup.visible')
                     )) {
                         focusedEl.click();

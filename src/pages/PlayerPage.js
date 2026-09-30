@@ -4042,7 +4042,11 @@ class PlayerPage extends Page {
                 mediaSource?.RunTimeTicks ||
                 item?.RunTimeTicks ||
                 0;
-            const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
+            // Live streams (TV channels, infinite streams, or active live stream IDs) have
+            // rolling buffer durations (e.g. 5s chunks) and must never trigger PlayedToCompletion
+            // position overrides.
+            const isLive = item?.Type === 'TvChannel' || Boolean(mediaSource?.LiveStreamId || mediaSource?.IsInfiniteStream);
+            const _isNearComplete = !isLive && durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
             if (_isNearComplete) {
                 log.info(
                     `Overriding positionTicks with durationTicks (${durationTicks})` +
