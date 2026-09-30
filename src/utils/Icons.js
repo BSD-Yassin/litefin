@@ -284,14 +284,16 @@ const iconStyles = {
                 outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="m12 13.333l-9.223 6.149A.5.5 0 0 1 2 19.066V4.934a.5.5 0 0 1 .777-.416L12 10.667V4.934a.5.5 0 0 1 .777-.416l10.599 7.066a.5.5 0 0 1 0 .832l-10.599 7.066a.5.5 0 0 1-.777-.416zM10.394 12L4 7.737v8.526zM14 7.737v8.526L20.394 12z"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="m12 13.333l-9.223 6.149A.5.5 0 0 1 2 19.066V4.934a.5.5 0 0 1 .777-.416L12 10.667V4.934a.5.5 0 0 1 .777-.416l10.599 7.066a.5.5 0 0 1 0 .832l-10.599 7.066a.5.5 0 0 1-.777-.416z"/></svg>`
             },
-            replay10: {
-                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
-                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
-            },
-            forward10: {
-                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
-                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
-            },
+            replay5: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M22 12c0-5.523-4.477-10-10-10a9.98 9.98 0 0 0-7.553 3.446L2 3v6h6L5.865 6.865A8 8 0 1 1 4 12H2c0 5.523 4.477 10 10 10s10-4.477 10-10m-7.5-2V8.5h-5v4.25h3.125a.625.625 0 1 1 0 1.25H9.5v1.5h3.125a2.125 2.125 0 0 0 0-4.25H11V10z"/></svg>`,
+            replay10: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12h2a8 8 0 1 0 1.865-5.135L8 9H2V3l2.447 2.446A9.98 9.98 0 0 1 12 2m2.5 6.25a2.5 2.5 0 0 0-2.5 2.5v2.5a2.5 2.5 0 0 0 5 0v-2.5a2.5 2.5 0 0 0-2.5-2.5m1 2.5v2.5a1 1 0 1 1-2 0v-2.5a1 1 0 1 1 2 0M10 8.5H8.5v7H10z"/></svg>`,
+            replay15: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12h2a8 8 0 1 0 1.865-5.135L8 9H2V3l2.447 2.446A9.98 9.98 0 0 1 12 2M8.5 8.5H10v7H8.5zm8.25 0H12v4.25h2.875a.625.625 0 1 1 0 1.25H12v1.5h2.875a2.125 2.125 0 0 0 0-4.25H13.5V10h3.25z"/></svg>`,
+            replay20: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Tabler Icons by Paweł Kuna - https://github.com/tabler/tabler-icons/blob/master/LICENSE --><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M19.007 16.466A6 6 0 0 0 15 6H4"/><path d="M7 9L4 6l3-3m5 12.5v3a1.5 1.5 0 0 0 3 0v-3a1.5 1.5 0 0 0-3 0M6 14h2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H7a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h2"/></g></svg>`,
+            replay30: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M22 12c0-5.523-4.477-10-10-10a9.98 9.98 0 0 0-7.553 3.446L2 3v6h4.75v1h2.625a.625.625 0 1 1 0 1.25H7.5v1.5h1.875a.625.625 0 1 1 0 1.25H6.75v1.5h2.625a2.125 2.125 0 0 0 1.62-3.5a2.125 2.125 0 0 0-1.62-3.5H7.5L5.865 6.865A8 8 0 1 1 4 12H2c0 5.523 4.477 10 10 10s10-4.477 10-10m-9.5-1.25a2.5 2.5 0 0 1 5 0v2.5a2.5 2.5 0 0 1-5 0zm2.5-1a1 1 0 0 0-1 1v2.5a1 1 0 1 0 2 0v-2.5a1 1 0 0 0-1-1"/></svg>`,
+            forward5: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M2 12C2 6.477 6.477 2 12 2a9.98 9.98 0 0 1 7.553 3.446L22 3v6h-6l2.135-2.135A8 8 0 1 0 20 12h2c0 5.523-4.477 10-10 10S2 17.523 2 12m12.5-2V8.5h-5v4.25h3.125a.625.625 0 1 1 0 1.25H9.5v1.5h3.125a2.125 2.125 0 0 0 0-4.25H11V10z"/></svg>`,
+            forward10: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10h-2a8 8 0 1 1-1.865-5.135l-1.997 1.997A2.5 2.5 0 0 0 12 10.75v2.5a2.5 2.5 0 0 0 5 0v-2.5c0-.681-.273-1.3-.715-1.75H22V3l-2.447 2.446A9.98 9.98 0 0 0 12 2m3.5 8.75v2.5a1 1 0 1 1-2 0v-2.5a1 1 0 1 1 2 0M10 8.5H8.5v7H10z"/></svg>`,
+            forward15: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10h-2a8 8 0 1 1-1.865-5.135L16.5 8.5H12v4.25h2.875a.625.625 0 1 1 0 1.25H12v1.5h2.875a2.125 2.125 0 0 0 0-4.25H13.5V10h3.25V9H22V3l-2.447 2.446A9.98 9.98 0 0 0 12 2M8.5 8.5H10v7H8.5z"/></svg>`,
+            forward20: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Tabler Icons by Paweł Kuna - https://github.com/tabler/tabler-icons/blob/master/LICENSE --><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5.007 16.478A6 6 0 0 1 9 6h11m-5 9.5v3a1.5 1.5 0 0 0 3 0v-3a1.5 1.5 0 0 0-3 0"/><path d="m17 9l3-3l-3-3M9 14h2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h2"/></g></svg>`,
+            forward30: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M2 12C2 6.477 6.477 2 12 2a9.98 9.98 0 0 1 7.553 3.446L22 3v6h-5.215c.442.45.715 1.069.715 1.75v2.5a2.5 2.5 0 0 1-5 0v-2.5a2.5 2.5 0 0 1 3.853-2.103l1.782-1.782A8 8 0 1 0 20 12h2c0 5.523-4.477 10-10 10S2 17.523 2 12m13-2.25a1 1 0 0 0-1 1v2.5a1 1 0 1 0 2 0v-2.5a1 1 0 0 0-1-1m-5 3.625a.625.625 0 0 0-.625-.625H7.5v-1.5h1.875a.625.625 0 1 0 0-1.25H6.75V8.5h2.625a2.125 2.125 0 0 1 1.62 3.5a2.125 2.125 0 0 1-1.62 3.5H6.75V14h2.625c.345 0 .625-.28.625-.625"/></svg>`,
             play: {
                 outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="M8 18.392V5.608L18.226 12zM6 3.804v16.392a1 1 0 0 0 1.53.848l13.113-8.196a1 1 0 0 0 0-1.696L7.53 2.956A1 1 0 0 0 6 3.804"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/Remix-Design/RemixIcon/blob/master/License --><path fill="currentColor" d="M6 20.196V3.804a1 1 0 0 1 1.53-.848l13.113 8.196a1 1 0 0 1 0 1.696L7.53 21.044A1 1 0 0 1 6 20.196"/></svg>`
@@ -550,14 +552,16 @@ const iconStyles = {
                 outlined: `<svg width="32" height="32" viewBox="0.5 2 20 20"><!-- Icon from Material 3 --><path fill="currentColor" d="M2.5 16.125v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T10.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725m10 0v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T20.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725m-8-1.875L7.9 12L4.5 9.75zm10 0L17.9 12l-3.4-2.25z"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="0.5 2 20 20"><!-- Icon from Material 3 --><path fill="currentColor" d="M2.5 16.125v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T10.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725m10 0v-8.25q0-.45.3-.725t.7-.275q.125 0 .275.025t.275.125l6.2 4.15q.225.15.338.363T20.7 12t-.112.463t-.338.362l-6.2 4.15q-.125.1-.275.125t-.275.025q-.4 0-.7-.275t-.3-.725"/></svg>`
             },
-            replay10: {
-                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
-                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.65 6.5h-2.13A7 7 0 1 1 12.5 5v3l4-4l-4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
-            },
-            forward10: {
-                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`,
-                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.65 6.5h2.13A7 7 0 1 0 11.5 5v3l-4-4l4-4zm-2.25 7h1.5v6h-1.5zm3.25 0h1.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 1.5v3h1.5v-3z"/></svg>`
-            },
+            replay5: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M22 12c0-5.523-4.477-10-10-10a9.98 9.98 0 0 0-7.553 3.446L2 3v6h6L5.865 6.865A8 8 0 1 1 4 12H2c0 5.523 4.477 10 10 10s10-4.477 10-10m-7.5-2V8.5h-5v4.25h3.125a.625.625 0 1 1 0 1.25H9.5v1.5h3.125a2.125 2.125 0 0 0 0-4.25H11V10z"/></svg>`,
+            replay10: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12h2a8 8 0 1 0 1.865-5.135L8 9H2V3l2.447 2.446A9.98 9.98 0 0 1 12 2m2.5 6.25a2.5 2.5 0 0 0-2.5 2.5v2.5a2.5 2.5 0 0 0 5 0v-2.5a2.5 2.5 0 0 0-2.5-2.5m1 2.5v2.5a1 1 0 1 1-2 0v-2.5a1 1 0 1 1 2 0M10 8.5H8.5v7H10z"/></svg>`,
+            replay15: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12h2a8 8 0 1 0 1.865-5.135L8 9H2V3l2.447 2.446A9.98 9.98 0 0 1 12 2M8.5 8.5H10v7H8.5zm8.25 0H12v4.25h2.875a.625.625 0 1 1 0 1.25H12v1.5h2.875a2.125 2.125 0 0 0 0-4.25H13.5V10h3.25z"/></svg>`,
+            replay20: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Tabler Icons by Paweł Kuna - https://github.com/tabler/tabler-icons/blob/master/LICENSE --><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M19.007 16.466A6 6 0 0 0 15 6H4"/><path d="M7 9L4 6l3-3m5 12.5v3a1.5 1.5 0 0 0 3 0v-3a1.5 1.5 0 0 0-3 0M6 14h2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H7a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h2"/></g></svg>`,
+            replay30: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M22 12c0-5.523-4.477-10-10-10a9.98 9.98 0 0 0-7.553 3.446L2 3v6h4.75v1h2.625a.625.625 0 1 1 0 1.25H7.5v1.5h1.875a.625.625 0 1 1 0 1.25H6.75v1.5h2.625a2.125 2.125 0 0 0 1.62-3.5a2.125 2.125 0 0 0-1.62-3.5H7.5L5.865 6.865A8 8 0 1 1 4 12H2c0 5.523 4.477 10 10 10s10-4.477 10-10m-9.5-1.25a2.5 2.5 0 0 1 5 0v2.5a2.5 2.5 0 0 1-5 0zm2.5-1a1 1 0 0 0-1 1v2.5a1 1 0 1 0 2 0v-2.5a1 1 0 0 0-1-1"/></svg>`,
+            forward5: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M2 12C2 6.477 6.477 2 12 2a9.98 9.98 0 0 1 7.553 3.446L22 3v6h-6l2.135-2.135A8 8 0 1 0 20 12h2c0 5.523-4.477 10-10 10S2 17.523 2 12m12.5-2V8.5h-5v4.25h3.125a.625.625 0 1 1 0 1.25H9.5v1.5h3.125a2.125 2.125 0 0 0 0-4.25H11V10z"/></svg>`,
+            forward10: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10h-2a8 8 0 1 1-1.865-5.135l-1.997 1.997A2.5 2.5 0 0 0 12 10.75v2.5a2.5 2.5 0 0 0 5 0v-2.5c0-.681-.273-1.3-.715-1.75H22V3l-2.447 2.446A9.98 9.98 0 0 0 12 2m3.5 8.75v2.5a1 1 0 1 1-2 0v-2.5a1 1 0 1 1 2 0M10 8.5H8.5v7H10z"/></svg>`,
+            forward15: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10h-2a8 8 0 1 1-1.865-5.135L16.5 8.5H12v4.25h2.875a.625.625 0 1 1 0 1.25H12v1.5h2.875a2.125 2.125 0 0 0 0-4.25H13.5V10h3.25V9H22V3l-2.447 2.446A9.98 9.98 0 0 0 12 2M8.5 8.5H10v7H8.5z"/></svg>`,
+            forward20: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Tabler Icons by Paweł Kuna - https://github.com/tabler/tabler-icons/blob/master/LICENSE --><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5.007 16.478A6 6 0 0 1 9 6h11m-5 9.5v3a1.5 1.5 0 0 0 3 0v-3a1.5 1.5 0 0 0-3 0"/><path d="m17 9l3-3l-3-3M9 14h2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h2"/></g></svg>`,
+            forward30: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M2 12C2 6.477 6.477 2 12 2a9.98 9.98 0 0 1 7.553 3.446L22 3v6h-5.215c.442.45.715 1.069.715 1.75v2.5a2.5 2.5 0 0 1-5 0v-2.5a2.5 2.5 0 0 1 3.853-2.103l1.782-1.782A8 8 0 1 0 20 12h2c0 5.523-4.477 10-10 10S2 17.523 2 12m13-2.25a1 1 0 0 0-1 1v2.5a1 1 0 1 0 2 0v-2.5a1 1 0 0 0-1-1m-5 3.625a.625.625 0 0 0-.625-.625H7.5v-1.5h1.875a.625.625 0 1 0 0-1.25H6.75V8.5h2.625a2.125 2.125 0 0 1 1.62 3.5a2.125 2.125 0 0 1-1.62 3.5H6.75V14h2.625c.345 0 .625-.28.625-.625"/></svg>`,
             play: {
                 outlined: `<svg width="32" height="32" viewBox="3 3 18 18"><!-- Icon from Material Symbols Rounded --><path fill="currentColor" d="M8 17.175V6.825q0-.425.3-.713t.7-.287q.125 0 .263.037t.262.113l8.15 5.175q.225.15.338.375t.112.475t-.112.475t-.338.375l-8.15 5.175q-.125.075-.262.113T9 18.175q-.4 0-.7-.288t-.3-.712m2-1.825L15.25 12L10 8.65z"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="3 3 18 18"><!-- Icon from Material Symbols Rounded --><path fill="currentColor" d="M8 17.175V6.825q0-.425.3-.713t.7-.287q.125 0 .263.037t.262.113l8.15 5.175q.225.15.338.375t.112.475t-.112.475t-.338.375l-8.15 5.175q-.125.075-.262.113T9 18.175q-.4 0-.7-.288t-.3-.712"/></svg>`
@@ -994,7 +998,7 @@ function createIconProxy(category) {
                     const activeStyle = getActiveStyle();
                     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                     const categorySet = styleSet[category] || iconStyles['default'][category];
-                    
+
                     // Fall back to default style entry if the current theme omits this specific icon
                     const iconDef = (categorySet && categorySet[prop] !== undefined)
                         ? categorySet[prop]
@@ -1022,7 +1026,7 @@ function createIconProxy(category) {
                     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                     const categorySet = styleSet[category] || iconStyles['default'][category];
                     return Reflect.getOwnPropertyDescriptor(categorySet, prop) ||
-                           Reflect.getOwnPropertyDescriptor(iconStyles['default'][category] || {}, prop);
+                        Reflect.getOwnPropertyDescriptor(iconStyles['default'][category] || {}, prop);
                 }
             }
         );
@@ -1039,7 +1043,7 @@ function createIconProxy(category) {
                 const activeStyle = getActiveStyle();
                 const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                 const categorySet = styleSet[category] || iconStyles['default'][category];
-                
+
                 // Fall back per-property to ensure no blank icons render on legacy platforms
                 const iconDef = (categorySet && categorySet[prop] !== undefined)
                     ? categorySet[prop]
@@ -1092,11 +1096,11 @@ export function getLibraryIcon(type) {
 
     // Fetch and return the full SVG string directly
     const rawIcon = libraryIcons[resolvedType] ||
-                    libraryIcons['folders'] ||
-                    libraryIcons['default'] ||
-                    iconStyles['default'].libraryIcons[resolvedType] ||
-                    iconStyles['default'].libraryIcons['folders'] ||
-                    iconStyles['default'].libraryIcons['default'];
+        libraryIcons['folders'] ||
+        libraryIcons['default'] ||
+        iconStyles['default'].libraryIcons[resolvedType] ||
+        iconStyles['default'].libraryIcons['folders'] ||
+        iconStyles['default'].libraryIcons['default'];
     return resolveIcon(rawIcon);
 }
 
@@ -1113,7 +1117,7 @@ export function getStaticIcon(category, name, preferredVariant = 'outlined') {
     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
     const categorySet = styleSet[category] || iconStyles['default'][category];
     if (!categorySet) return '';
-    
+
     // Per-property lookup with fallback to default theme
     const iconEntry = categorySet[name] !== undefined
         ? categorySet[name]

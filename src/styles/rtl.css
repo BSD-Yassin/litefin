@@ -160,7 +160,9 @@
     right: 0;
 }
 
-[dir="rtl"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus):not(:focus-within) {
+/* RTL off-screen translation when hidden - omit :focus-within for Chromium <63 compatibility */
+[dir="rtl"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus) {
+    -webkit-transform: translate3d(100%, 0, 0);
     transform: translate3d(100%, 0, 0);
 }
 

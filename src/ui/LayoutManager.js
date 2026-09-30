@@ -199,14 +199,20 @@ class LayoutManager {
         }
 
         /*
-         * Load saved sidebar navigation layout preference.
-         * Ultra-legacy hardware (Chrome <47 / Tizen 2.x / c26 quirks) requires the classic sidebar layout.
-         * Modern/legacy tiers default cleanly to 'modern'.
+         * ---------------------------------------------------------------------
+         * SIDEBAR LAYOUT CONFIGURATION & DEFAULT SELECTION
+         * ---------------------------------------------------------------------
+         * Load saved sidebar navigation layout preference from persistent storage.
+         * Ultra-legacy hardware (Chrome <47 / Tizen 2.x / c26 quirks) defaults
+         * gracefully to the lightweight 'classic' sidebar layout for maximum
+         * performance and compatibility, but users can freely select other
+         * modern or floating layout modes in Settings.
+         * Modern and legacy tiers default to 'modern-collapsed'.
+         * ---------------------------------------------------------------------
          */
         const isUltraLegacy = platformInfo.layoutTier === 'ultra-legacy';
-        const savedSidebarLayout = isUltraLegacy
-            ? 'classic'
-            : storage.getItem('pref:sidebarLayoutMode') || 'modern-collapsed';
+        const defaultSidebarLayout = isUltraLegacy ? 'classic' : 'modern-collapsed';
+        const savedSidebarLayout = storage.getItem('pref:sidebarLayoutMode') || defaultSidebarLayout;
 
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
@@ -448,15 +454,10 @@ class LayoutManager {
      * Sets and activates the sidebar layout mode across the entire UI.
      * Stamped onto <html> as data-layout-sidebar to power layout-scoped styling.
      *
-     * @param {string} layout - The target sidebar layout identifier ('classic', etc.)
+     * @param {string} layout - The target sidebar layout identifier ('classic', 'modern', etc.)
      * @param {boolean} [save=true] - Whether to persist this preference in storage
      */
     setSidebarLayout(layout, save = true) {
-        // Enforce classic layout on ultra-legacy tier to maintain c26 rendering quirks compatibility
-        if (platformInfo.layoutTier === 'ultra-legacy') {
-            layout = 'classic';
-        }
-
         // Record new layout state in memory
         this._sidebarLayout = layout;
 
@@ -474,13 +475,10 @@ class LayoutManager {
 
     /**
      * Checks if the sidebar is currently configured with the classic layout.
-     * Always returns true on ultra-legacy (Chrome <47 / Tizen 2.x / c26 quirks) hardware.
-     * @returns {boolean} True if sidebar layout is 'classic' or platform is ultra-legacy.
+     *
+     * @returns {boolean} True if sidebar layout is 'classic'.
      */
     isClassicSidebarLayout() {
-        if (platformInfo.layoutTier === 'ultra-legacy') {
-            return true;
-        }
         return this._sidebarLayout === 'classic';
     }
 

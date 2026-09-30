@@ -1387,9 +1387,11 @@ class Sidebar extends Component {
      * ============================================================================
      */
     _updateTransparentCollapsed() {
-        // Retrieve configured background preferences with defaults
-        const colorPref = storage.getItem('pref:collapsedSidebarColor') || 'transparent';
+        // Retrieve configured background preferences:
+        // Enforce the expanded background color across both collapsed and expanded states
+        // so that the collapsed rail maintains a solid, cohesive backdrop behind icons.
         const expandedColorPref = storage.getItem('pref:expandedSidebarColor') || 'theme';
+        const colorPref = expandedColorPref;
 
         // Check if current active route corresponds to the Settings screen
         const isSettings = Boolean(
@@ -1401,7 +1403,7 @@ class Sidebar extends Component {
         // If collapsed sidebar is transparent, override it in Settings to render solid theme bg
         const isTransparentCollapsed = colorPref === 'transparent' && !isSettings;
 
-        // Apply collapsed style classes to element DOM
+        // Apply collapsed style classes to element DOM (matching expanded color style)
         this.el.classList.toggle('transparent-collapsed', isTransparentCollapsed);
         this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');
         this.el.classList.toggle('tinted-semi-collapsed', colorPref === 'tinted-semi');
