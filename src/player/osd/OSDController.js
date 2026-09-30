@@ -1767,9 +1767,10 @@ export default class OSDController extends Component {
 
             // Force focus to overlay (Slider usually index 1, Close index 0)
             this._currentFocusRow = -1;
-            // Default to slider for better UX? Or close? User said "can't reach seekbar".
-            // Let's default to slider (index 1 if close is 0).
-            const sliderIdx = this._cachedOverlayRow.findIndex(el => el.classList.contains('osd-slider'));
+            // Default directly to the slider for instant D-pad left/right adjustments
+            const sliderIdx = this._cachedOverlayRow.findIndex(
+                el => el.id === 'osdOffsetSlider' || el.classList.contains('osd-offset-slider') || el.classList.contains('osd-slider')
+            );
             this._currentFocusIndex = sliderIdx !== -1 ? sliderIdx : 0;
             this._updateFocus();
         } else {
@@ -2515,6 +2516,11 @@ export default class OSDController extends Component {
                             const playNow = this.upNextDialog.$el.querySelector('.upnext-btn-play');
                             const idx = playNow ? this._cachedOverlayRow.indexOf(playNow) : -1;
                             this._currentFocusIndex = idx !== -1 ? idx : 0;
+                        } else if (this.subtitleOffset?.isVisible) {
+                            const sliderIdx = this._cachedOverlayRow.findIndex(
+                                el => el.id === 'osdOffsetSlider' || el.classList.contains('osd-offset-slider')
+                            );
+                            this._currentFocusIndex = sliderIdx !== -1 ? sliderIdx : 0;
                         } else {
                             this._currentFocusIndex = 0;
                         }
