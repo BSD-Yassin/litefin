@@ -245,6 +245,7 @@ class Sidebar extends Component {
         };
         eventBus.on('pref:collapsedSidebarColor', this._onTransparentCollapsedChanged);
         eventBus.on('pref:expandedSidebarColor', this._onTransparentCollapsedChanged);
+        eventBus.on('pref:sidebarMode', this._onTransparentCollapsedChanged);
 
         this._onHideLibraryHeaderChanged = () => {
             this._loadLibraries();
@@ -453,6 +454,7 @@ class Sidebar extends Component {
         if (this._onTransparentCollapsedChanged) {
             eventBus.off('pref:collapsedSidebarColor', this._onTransparentCollapsedChanged);
             eventBus.off('pref:expandedSidebarColor', this._onTransparentCollapsedChanged);
+            eventBus.off('pref:sidebarMode', this._onTransparentCollapsedChanged);
         }
 
         if (this._onHideLibraryHeaderChanged) {
@@ -1387,11 +1389,28 @@ class Sidebar extends Component {
      * ============================================================================
      */
     _updateTransparentCollapsed() {
-        // Retrieve configured background preferences:
-        // Enforce the expanded background color across both collapsed and expanded states
-        // so that the collapsed rail maintains a solid, cohesive backdrop behind icons.
+        // Detect whether the sidebar is operating in hidden mode.
+        // Hidden mode is active when pref:sidebarMode is explicitly 'hidden',
+        // when in 'mixed' mode on a details page, or when body has .sidebar-mode-hidden.
+        const sidebarMode = storage.getItem('pref:sidebarMode') || 'shown';
+        const isHiddenMode = Boolean(
+            sidebarMode === 'hidden' ||
+            (sidebarMode === 'mixed' && (
+                this.activePath === '/details' ||
+                this.activePath?.startsWith('/details') ||
+                (typeof window !== 'undefined' && window.location.hash.startsWith('#/details'))
+            )) ||
+            (typeof document !== 'undefined' && document.body && document.body.classList.contains('sidebar-mode-hidden'))
+        );
+
+        // Retrieve configured background preferences from local storage
+        const collapsedColorPref = storage.getItem('pref:collapsedSidebarColor') || 'transparent';
         const expandedColorPref = storage.getItem('pref:expandedSidebarColor') || 'theme';
-        const colorPref = expandedColorPref;
+
+        // In normal non-hidden collapsed mode, strictly follow the collapsed color setting.
+        // In hidden mode (revealed over media or page content), use the expanded background color
+        // to provide a solid backdrop behind the icons when sliding into view.
+        const colorPref = isHiddenMode ? expandedColorPref : collapsedColorPref;
 
         // Check if current active route corresponds to the Settings screen
         const isSettings = Boolean(
@@ -1403,7 +1422,7 @@ class Sidebar extends Component {
         // If collapsed sidebar is transparent, override it in Settings to render solid theme bg
         const isTransparentCollapsed = colorPref === 'transparent' && !isSettings;
 
-        // Apply collapsed style classes to element DOM (matching expanded color style)
+        // Apply collapsed style classes to element DOM
         this.el.classList.toggle('transparent-collapsed', isTransparentCollapsed);
         this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');
         this.el.classList.toggle('tinted-semi-collapsed', colorPref === 'tinted-semi');

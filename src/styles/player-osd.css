@@ -116,9 +116,17 @@ html[data-osd-progress-color="theme-inverted"] {
     z-index: 10;
 }
 
+/* When Layer 1 is hidden, disable all pointer hit-testing and hide from accessibility/render tree */
 .osd-main.osd-hidden {
     opacity: 0;
-    pointer-events: none;
+    pointer-events: none !important;
+    visibility: hidden;
+}
+
+/* Force all descendants to ignore pointer events so invisible buttons and sliders cannot be clicked */
+.osd-main.osd-hidden,
+.osd-main.osd-hidden * {
+    pointer-events: none !important;
 }
 
 .osd-main > * {
@@ -2245,9 +2253,12 @@ body.resume-profile-selection-active .jellyfin-video-player {
    ============================================================================ */
 
 /* Main container state for stealth layout */
-.player-osd.osd-layout-hidden .osd-main.osd-hidden {
+/* Main container state for stealth layout: strictly suppress pointer events and hit-testing */
+.player-osd.osd-layout-hidden .osd-main.osd-hidden,
+.player-osd.osd-layout-hidden .osd-main.osd-hidden * {
     opacity: 0 !important;
     pointer-events: none !important;
+    visibility: hidden !important;
 }
 
 /* Overlays (Layer 2: UpNextDialog, Skip Intro/Outro buttons, Modals) remain fully visible and active */

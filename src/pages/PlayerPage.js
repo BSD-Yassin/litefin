@@ -833,16 +833,11 @@ class PlayerPage extends Page {
                 }
 
                 // Click landed on the raw video background.
-                // - If OSD is hidden: wake it up.
-                // - If OSD is visible: toggle play/pause (standard media player behaviour).
-                //   This branch is only reached for genuine background clicks — OSD buttons
-                //   and the slider are fully guarded by the contains() check above.
-                if (this._osd && !this._osd._isOsdVisible) {
-                    this._osd.show();
-                    this._osd.resetAutoHide();
-                } else {
-                    this._onRemotePlayPause();
-                }
+                // In all layouts, clicking the video background is the standard media player convention to toggle playback.
+                // - In stealth mode (hidden layout): _onRemotePlayPause shows the transient stealth HUD without waking the full OSD.
+                // - In standard layout: _onRemotePlayPause toggles playback and reveals/focuses the Play/Pause button.
+                // OSD buttons, seekbars, and modals are fully guarded by the contains() check above.
+                this._onRemotePlayPause();
             });
 
             // ================================================================
@@ -866,9 +861,20 @@ class PlayerPage extends Page {
                     return;
                 }
                 if (this._player) {
-                    log.info('Hardware Remote: Rewind (10s)');
-                    this._player.seekRelative(-10000);
-                    if (this._osd) this._osd.show();
+                    // Resolve user-configured skip backward duration (defaults to 10s)
+                    const skipBackMs = PlayerSettings.get('skipBackLength') || 10000;
+                    const skipBackSec = Math.round(skipBackMs / 1000);
+                    log.info(`Hardware Remote: Rewind (${skipBackSec}s)`);
+                    this._player.seekRelative(-skipBackMs);
+
+                    // Show transient HUD in stealth layout, otherwise standard OSD
+                    if (this._osd) {
+                        if (PlayerSettings.get('osdLayout') === 'hidden' && !this._osd.isOsdVisible) {
+                            this._osd.showStealthHud('seekBack', skipBackSec);
+                        } else {
+                            this._osd.show();
+                        }
+                    }
                 }
             });
 
@@ -878,9 +884,20 @@ class PlayerPage extends Page {
                     return;
                 }
                 if (this._player) {
-                    log.info('Hardware Remote: FastForward (30s)');
-                    this._player.seekRelative(30000);
-                    if (this._osd) this._osd.show();
+                    // Resolve user-configured skip forward duration (defaults to 30s)
+                    const skipForwardMs = PlayerSettings.get('skipForwardLength') || 30000;
+                    const skipForwardSec = Math.round(skipForwardMs / 1000);
+                    log.info(`Hardware Remote: FastForward (${skipForwardSec}s)`);
+                    this._player.seekRelative(skipForwardMs);
+
+                    // Show transient HUD in stealth layout, otherwise standard OSD
+                    if (this._osd) {
+                        if (PlayerSettings.get('osdLayout') === 'hidden' && !this._osd.isOsdVisible) {
+                            this._osd.showStealthHud('seekForward', skipForwardSec);
+                        } else {
+                            this._osd.show();
+                        }
+                    }
                 }
             });
 

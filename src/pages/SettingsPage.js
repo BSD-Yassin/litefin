@@ -3460,6 +3460,7 @@ class SettingsPage extends Page {
                     { value: 5000, label: i18n.t('Seconds', ['5']) },
                     { value: 10000, label: i18n.t('Seconds', ['10']) },
                     { value: 15000, label: i18n.t('Seconds', ['15']) },
+                    { value: 20000, label: i18n.t('Seconds', ['20']) },
                     { value: 30000, label: i18n.t('Seconds', ['30']) },
                     { value: 60000, label: i18n.t('Seconds', ['60']) }
                 ],
@@ -3480,6 +3481,7 @@ class SettingsPage extends Page {
                     { value: 5000, label: i18n.t('Seconds', ['5']) },
                     { value: 10000, label: i18n.t('Seconds', ['10']) },
                     { value: 15000, label: i18n.t('Seconds', ['15']) },
+                    { value: 20000, label: i18n.t('Seconds', ['20']) },
                     { value: 30000, label: i18n.t('Seconds', ['30']) },
                     { value: 60000, label: i18n.t('Seconds', ['60']) }
                 ],
@@ -10042,6 +10044,9 @@ class SettingsPage extends Page {
                                 if (hideHeaderToggle) hideHeaderToggle.classList.add('active');
                                 eventBus.emit('prefChanged:hideSidebarLibraryHeader', true);
                             }
+
+                            // Emit event to notify Sidebar and other components immediately
+                            eventBus.emit('pref:sidebarMode', newValue);
 
                             focusManager.invalidateCache('sidebar');
                             focusManager.invalidateCache('home');

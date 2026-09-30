@@ -146,6 +146,11 @@ export default class OSDController extends Component {
             // Listen to plugin state changes for the button
             eventBus.on('syncplay:enabled', this._boundSyncPlayButtonState);
             eventBus.on('syncplay:disabled', this._boundSyncPlayButtonState);
+
+            // Listen to skip length setting updates to dynamically update button icons
+            this._boundUpdateSkipButtonIcons = () => this._updateSkipButtonIcons();
+            eventBus.on('pref:skipBackLength', this._boundUpdateSkipButtonIcons);
+            eventBus.on('pref:skipForwardLength', this._boundUpdateSkipButtonIcons);
         });
 
         this._initMenus();
@@ -464,6 +469,10 @@ export default class OSDController extends Component {
                 eventBus.off('syncplay:command', this._boundHandleSyncPlayNotification);
                 eventBus.off('syncplay:groupupdate', this._boundHandleSyncPlayNotification);
             }
+            if (this._boundUpdateSkipButtonIcons) {
+                eventBus.off('pref:skipBackLength', this._boundUpdateSkipButtonIcons);
+                eventBus.off('pref:skipForwardLength', this._boundUpdateSkipButtonIcons);
+            }
         });
 
         this.menus.forEach(menu => menu.hide?.());
@@ -534,9 +543,9 @@ export default class OSDController extends Component {
                         <div class="osd-controls-left">
                             <button class="osd-btn" data-action="previousTrack" tabindex="0" id="osdPrevBtn">${osdIcons.skipPrevious}</button>
                             <button class="osd-btn osd-btn-disabled" data-action="previousChapter" tabindex="-1" id="osdPrevChapterBtn">${osdIcons.chapterPrevious}</button>
-                            <button class="osd-btn" data-action="rewind" tabindex="0">${osdIcons.fastRewind}</button>
+                            <button class="osd-btn" data-action="rewind" tabindex="0">${this._getRewindIcon()}</button>
                             <button class="osd-btn osd-btn-play" id="osdPlayPauseBtn" data-action="togglePlay" tabindex="0">${osdIcons.pause}</button>
-                            <button class="osd-btn" data-action="fastForward" tabindex="0">${osdIcons.fastForward}</button>
+                            <button class="osd-btn" data-action="fastForward" tabindex="0">${this._getForwardIcon()}</button>
                             <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${osdIcons.chapterNext}</button>
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${osdIcons.skipNext}</button>
                             
@@ -700,9 +709,6 @@ export default class OSDController extends Component {
              * should activate it.
              */
 
-            // Every click inside the OSD resets the auto-hide timer.
-            this.resetAutoHide();
-
             /*
              * WEBOS / TIZEN POINTER-EVENTS BUG WORKAROUND
              *
@@ -730,6 +736,44 @@ export default class OSDController extends Component {
                     }
                 }
             }
+
+            /*
+             * ========================================================================
+             * HIDDEN OSD / STEALTH MODE CLICK INTERCEPTION
+             * ========================================================================
+             * When Layer 1 controls are hidden, any click landing on the screen or
+             * transparent OSD container must NEVER execute hidden buttons or scrub
+             * the invisible timeline.
+             * 
+             * EXCEPTION: Active Layer 2 modal dialogs (isModalOpen) or floating overlay
+             * widgets (e.g., Skip Intro / Skip Outro buttons) must remain clickable.
+             * 
+             * For all genuine video/background clicks while the OSD is hidden:
+             * - In stealth mode (hidden layout): toggle play/pause with transient HUD
+             *   feedback without waking or revealing the full OSD.
+             * - In standard layout: toggle play/pause and reveal the OSD.
+             * ========================================================================
+             */
+            if (!this._isOsdVisible && !this.isModalOpen && !resolvedTarget.closest?.('.osd-overlays > *')) {
+                e.stopPropagation();
+                // Route through PlayerPage remote play/pause handler to update heartbeat and UI
+                if (this._playerPage && typeof this._playerPage._onRemotePlayPause === 'function') {
+                    this._playerPage._onRemotePlayPause();
+                } else if (this._player?.togglePlay) {
+                    const wasPaused = this._player.isPaused?.();
+                    this._player.togglePlay();
+                    // Display appropriate visual feedback based on layout mode
+                    if (PlayerSettings.get('osdLayout') === 'hidden') {
+                        this.showStealthHud(wasPaused ? 'play' : 'pause');
+                    } else {
+                        this.showAndFocusPlayPause();
+                    }
+                }
+                return;
+            }
+
+            // Every click inside the active OSD resets the auto-hide timer.
+            this.resetAutoHide();
 
             // Resolve the [data-action] button from the (possibly remapped) target
             const btn = resolvedTarget.closest('[data-action]');
@@ -933,6 +977,7 @@ export default class OSDController extends Component {
         }
 
         this.updatePlayPauseButton();
+        this._updateSkipButtonIcons();
 
         return this._osdEl;
     }
@@ -1091,15 +1136,21 @@ export default class OSDController extends Component {
                 text = '';
                 break;
             case 'seekBack':
-            case 'rewind':
-                iconHtml = osdIcons.replay10 || osdIcons.fastRewind;
-                text = param ? `-${param}s` : '-10s';
+            case 'rewind': {
+                // Determine skip backward seconds from parameter or user settings
+                const backSec = param ? Number(param) : Math.round((PlayerSettings.get('skipBackLength') || this._config?.seekStepBack || 10000) / 1000);
+                iconHtml = this._getRewindIcon(backSec);
+                text = param ? `-${param}s` : `-${backSec}s`;
                 break;
+            }
             case 'seekForward':
-            case 'fastForward':
-                iconHtml = osdIcons.forward10 || osdIcons.fastForward;
-                text = param ? `+${param}s` : '+10s';
+            case 'fastForward': {
+                // Determine skip forward seconds from parameter or user settings
+                const fwdSec = param ? Number(param) : Math.round((PlayerSettings.get('skipForwardLength') || this._config?.seekStepForward || 10000) / 1000);
+                iconHtml = this._getForwardIcon(fwdSec);
+                text = param ? `+${param}s` : `+${fwdSec}s`;
                 break;
+            }
             default:
                 return;
         }
@@ -1399,6 +1450,9 @@ export default class OSDController extends Component {
 
     _updateNavigationButtons() {
         if (!this._osdEl) return;
+
+        // Synchronize skip button icons with user duration preferences
+        this._updateSkipButtonIcons();
 
         const hasPrev = playQueue.hasPrevious();
         const hasNext = playQueue.hasNext();
@@ -3413,6 +3467,88 @@ export default class OSDController extends Component {
         this._osdPlayPauseBtnEl.innerHTML = isPaused ? osdIcons.play : osdIcons.pause;
     }
 
+    /**
+     * Resolves the appropriate replay/rewind SVG icon based on the configured skip backward seconds.
+     * Maps 5s -> replay5, 10s -> replay10, 15s -> replay15, 20s -> replay20, 30s & 60s -> replay30.
+     * @param {number} [seconds] Optional duration in seconds; defaults to PlayerSettings skipBackLength
+     * @returns {string} SVG icon HTML string
+     */
+    _getRewindIcon(seconds) {
+        const icons = typeof osdIcons !== 'undefined' ? osdIcons : {};
+        // Resolve seconds from parameter or user preferences
+        const sec = seconds !== undefined
+            ? Number(seconds)
+            : Math.round((PlayerSettings.get('skipBackLength') || this._config?.seekStepBack || 10000) / 1000);
+
+        // Map duration to corresponding SVG icon (60s uses 30s icon per design)
+        switch (sec) {
+            case 5:
+                return icons.replay5 || icons.fastRewind || '';
+            case 10:
+                return icons.replay10 || icons.fastRewind || '';
+            case 15:
+                return icons.replay15 || icons.fastRewind || '';
+            case 20:
+                return icons.replay20 || icons.fastRewind || '';
+            case 30:
+            case 60:
+                return icons.replay30 || icons.fastRewind || '';
+            default:
+                return icons.replay10 || icons.fastRewind || '';
+        }
+    }
+
+    /**
+     * Resolves the appropriate forward SVG icon based on the configured skip forward seconds.
+     * Maps 5s -> forward5, 10s -> forward10, 15s -> forward15, 20s -> forward20, 30s & 60s -> forward30.
+     * @param {number} [seconds] Optional duration in seconds; defaults to PlayerSettings skipForwardLength
+     * @returns {string} SVG icon HTML string
+     */
+    _getForwardIcon(seconds) {
+        const icons = typeof osdIcons !== 'undefined' ? osdIcons : {};
+        // Resolve seconds from parameter or user preferences
+        const sec = seconds !== undefined
+            ? Number(seconds)
+            : Math.round((PlayerSettings.get('skipForwardLength') || this._config?.seekStepForward || 10000) / 1000);
+
+        // Map duration to corresponding SVG icon (60s uses 30s icon per design)
+        switch (sec) {
+            case 5:
+                return icons.forward5 || icons.fastForward || '';
+            case 10:
+                return icons.forward10 || icons.fastForward || '';
+            case 15:
+                return icons.forward15 || icons.fastForward || '';
+            case 20:
+                return icons.forward20 || icons.fastForward || '';
+            case 30:
+            case 60:
+                return icons.forward30 || icons.fastForward || '';
+            default:
+                return icons.forward10 || icons.fastForward || '';
+        }
+    }
+
+    /**
+     * Updates the inner HTML of the rewind and fastForward buttons with the appropriate
+     * numeric skip icon matching the user's configured skip lengths (unless combined skip buttons is enabled).
+     */
+    _updateSkipButtonIcons() {
+        if (!this._osdEl || PlayerSettings.get('osdCombineSkipButtons') === true) return;
+
+        // Update rewind button icon
+        const rewindBtn = this._osdEl.querySelector('[data-action="rewind"]');
+        if (rewindBtn) {
+            rewindBtn.innerHTML = this._getRewindIcon();
+        }
+
+        // Update fast-forward button icon
+        const fastForwardBtn = this._osdEl.querySelector('[data-action="fastForward"]');
+        if (fastForwardBtn) {
+            fastForwardBtn.innerHTML = this._getForwardIcon();
+        }
+    }
+
     _startUpdates() {
         if (this._updateTimer) return;
 
@@ -3574,6 +3710,12 @@ export default class OSDController extends Component {
         return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
     _handlePositionSliderInput(e) {
+        // Disallow scrubbing while OSD is hidden
+        if (!this._isOsdVisible) {
+            if (this._player) this._updatePositionSlider(this._player);
+            return;
+        }
+
         if (this._suppressSliderChange) {
             if (this._player) this._updatePositionSlider(this._player);
             return;
@@ -3669,6 +3811,12 @@ export default class OSDController extends Component {
     }
 
     _handlePositionSliderChange(e) {
+        // Disallow commits to timeline while OSD is hidden
+        if (!this._isOsdVisible) {
+            if (this._player) this._updatePositionSlider(this._player);
+            return;
+        }
+
         if (this._suppressSliderChange) {
             this._suppressSliderChange = false;
             // Revert the rogue value=0 change that the TV browser forced upon us
