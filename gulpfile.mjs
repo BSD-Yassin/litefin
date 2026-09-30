@@ -546,7 +546,7 @@ async function syncVersion() {
         console.info('package.json version is already up to date');
     }
 
-    // Sync appinfo.json
+    // Sync appinfo.json (WebOS platform configuration)
     if (fs.existsSync('./appinfo.json')) {
         const appinfo = JSON.parse(fs.readFileSync('./appinfo.json', 'utf8'));
         if (appinfo.version !== version) {
@@ -555,6 +555,19 @@ async function syncVersion() {
             fs.writeFileSync('./appinfo.json', JSON.stringify(appinfo, null, 4));
         } else {
             console.info('appinfo.json version is already up to date');
+        }
+    }
+
+    // Sync pake.json (Windows Desktop client manifest)
+    // Ensures the native Windows build metadata aligns with Tizen config.xml
+    if (fs.existsSync('./pake.json')) {
+        const pakeConfig = JSON.parse(fs.readFileSync('./pake.json', 'utf8'));
+        if (pakeConfig.appVersion !== version) {
+            console.info(`Syncing pake.json appVersion: ${pakeConfig.appVersion} -> ${version}`);
+            pakeConfig.appVersion = version;
+            fs.writeFileSync('./pake.json', JSON.stringify(pakeConfig, null, 2) + '\n');
+        } else {
+            console.info('pake.json appVersion is already up to date');
         }
     }
 }
@@ -717,6 +730,7 @@ export {
     webpackUltraLegacy,
     webpackDebug,
     webpackAll,
+    syncVersion,
     // Tizen WGT packaging
     packageModern,
     packageNormal,

@@ -302,6 +302,7 @@ class LazyLoader {
                 this._handleImageError(img);
             };
 
+            img.crossOrigin = 'anonymous';
             img.src = img.dataset.src;
         });
 
@@ -347,6 +348,7 @@ class LazyLoader {
             this._handleImageError(img);
         };
 
+        img.crossOrigin = 'anonymous';
         img.src = img.dataset.src;
 
         if (this.observer) {

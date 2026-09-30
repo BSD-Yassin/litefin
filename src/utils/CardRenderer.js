@@ -1141,7 +1141,7 @@ class CardRenderer {
             if (thumbUrl) {
                 // Return image tag with data-thumb-src. The image is downloaded eagerly
                 // on-demand when the card receives focus to preserve precious memory.
-                thumbPart = `<img data-thumb-src="${thumbUrl}" class="thumb-layer" alt="" />`;
+                thumbPart = `<img data-thumb-src="${thumbUrl}" class="thumb-layer" alt="" crossorigin="anonymous" />`;
             }
         }
 
@@ -1160,7 +1160,7 @@ class CardRenderer {
                 ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>`
                 : '';
         const imagePart = imageUrl
-            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
+            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" crossorigin="anonymous" />`
             : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials, isLibrary: type === 'library' })}`;
         const finalContextType = contextType || item.Type;
 

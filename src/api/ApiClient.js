@@ -1952,6 +1952,18 @@ export class ApiClient {
         if (options.quality) params.append('quality', options.quality);
         if (options.tag) params.append('tag', options.tag);
 
+        /*
+         * Include session token in image queries when authenticated.
+         * Browsers and native web views cannot inject custom authorization headers
+         * (such as 'Authorization: MediaBrowser ...') into standard HTML <img> element
+         * requests. Supplying the session token as a query parameter guarantees that
+         * servers enforcing strict media authorization can authenticate the image request.
+         */
+        if (this._accessToken) {
+            const authKey = this.isEmby() ? 'api_key' : 'ApiKey';
+            params.append(authKey, this._accessToken);
+        }
+
         // Compile query string and final endpoint URL reference
         const queryString = params.toString();
         const path = `/Items/${itemId}/Images/${imageType}`;
@@ -1973,6 +1985,15 @@ export class ApiClient {
 
         // Map quality settings
         if (options.quality) params.append('quality', options.quality);
+
+        /*
+         * Include session token for user avatar requests when available,
+         * ensuring user profile avatars load under cross-origin environments.
+         */
+        if (this._accessToken) {
+            const authKey = this.isEmby() ? 'api_key' : 'ApiKey';
+            params.append(authKey, this._accessToken);
+        }
 
         // Compile query string and final user endpoint URL reference
         const queryString = params.toString();
