@@ -469,8 +469,8 @@ const DEFAULTS = {
     // Skip forward duration in milliseconds
     skipForwardLength: 10000,
 
-    // Skip back duration in milliseconds
-    skipBackLength: 5000,
+    // Skip back duration in milliseconds (defaults to 10 seconds)
+    skipBackLength: 10000,
 
     // Auto-play next episode when current finishes
     enableNextEpisodeAutoPlay: true,
