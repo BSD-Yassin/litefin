@@ -9,7 +9,7 @@ assignees: MoazSalem
 **Priority** (check which is the most appropriate):
 From a scale of 1 to 10 (1 being lowest priority, 10 being highest priority), how critical do you think this bug is, and how fast should it be addressed ?
 
-**Score: 1-10**
+**1-10**
 
 **Describe the bug**
 A clear and concise description of what the bug is.

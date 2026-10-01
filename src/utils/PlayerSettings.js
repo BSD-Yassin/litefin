@@ -486,6 +486,17 @@ const DEFAULTS = {
     // Auto-play next episode when current finishes
     enableNextEpisodeAutoPlay: true,
 
+    /* -------------------------------------------------------------------------
+     * DYNAMIC EPISODE QUEUE WINDOW SIZE (PERFORMANCE)
+     * -------------------------------------------------------------------------
+     * Governs the number of preceding and succeeding episodes dynamically
+     * retrieved into the player queue around the active episode.
+     * Prevents loading hundreds or thousands of heavy episode metadata objects
+     * into memory at once for long-running series (e.g. 1,000-episode shows).
+     * Default: 50 (up to 50 previous and 50 next episodes = ~100 episode window).
+     * ------------------------------------------------------------------------- */
+    playQueueEpisodeLimit: 50,
+
     /**
      * =========================================================================
      * UP NEXT DIALOG TOGGLE

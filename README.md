@@ -40,7 +40,7 @@ Enable more features by installing the [**Litefin Plugin**](https://github.com/M
   - **Local Intros**: Seamless playback of custom pre-roll cinema bumpers.
   - **JellyEmu**: Native retro gaming launcher and UI for emulated games.
 - **TV Interface & Theming**:
-  - 10+ dynamic themes (Classic Dark/Light, True Black, Tinted Light/Dark, Ambient Glow, Apple TV, Blue Radiance, Purple Haze, WMC).
+  - 6+ dynamic themes (Classic Dark/Light, True Black, Tinted Light/Dark, Ambient Glow).
   - 5 customizable sidebar styles (Classic, Modern, Collapsed Modern with tooltips, Floating Buttons, Floating Island).
   - Multiple media card & row presentations (Classic rows, Modern cards, Modern posters, Expanding posters).
   - Canvas-based BlurHash placeholder decoding for buttery-smooth image loading.

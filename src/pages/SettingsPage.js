@@ -5293,6 +5293,32 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- -------------------------------------------------------------
+                 * Dynamic Play Queue Episode Window Size
+                 * Configures how many preceding and succeeding episodes are loaded
+                 * around the currently playing episode. Designed according to Apple
+                 * HIG for clarity, tactile responsiveness, and minimal footprint.
+                 * ------------------------------------------------------------- -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelPlayQueueEpisodeLimit">${i18n.t('LabelPlayQueueEpisodeLimit') || 'Episode Queue Window Size'}</span>
+                        <span class="setting-description" data-i18n="PlayQueueEpisodeLimitDescription">${i18n.t('PlayQueueEpisodeLimitDescription') || 'Number of previous and next episodes to load into the player queue around the active episode. Lower values reduce memory and improve performance on large series.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'play-queue-episode-limit-select',
+            [
+                { value: 25, label: '25' },
+                { value: 50, label: '50 (Default)' },
+                { value: 75, label: '75' },
+                { value: 100, label: '100' },
+                { value: 150, label: '150' }
+            ],
+            PlayerSettings.get('playQueueEpisodeLimit') || 50
+        )}
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
                  * Alphabet Quick-Jump Scroll Behavior (Only in Unlimited Mode)
                  * Enables scrolling directly to letter anchors instead of querying
                  * and filtering down the library items strictly to that letter.
@@ -9834,6 +9860,7 @@ class SettingsPage extends Page {
             'show-dates-select': { key: 'pref:showDates', type: 'local' },
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local', triggerEvent: true },
+            'play-queue-episode-limit-select': { type: 'player', key: 'playQueueEpisodeLimit' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-carousel-indicator-style-select': { key: 'pref:heroCarouselIndicatorStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
@@ -10200,7 +10227,8 @@ class SettingsPage extends Page {
                                 'tizenSegmentLength',
                                 'html5MaxBufferLength',
                                 'html5MaxMaxBufferLength',
-                                'html5SegmentLength'
+                                'html5SegmentLength',
+                                'playQueueEpisodeLimit'
                             ];
 
                             let val = newValue;
