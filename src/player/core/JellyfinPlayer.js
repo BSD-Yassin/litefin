@@ -553,6 +553,10 @@ export class JellyfinPlayer extends EventEmitter {
         this._pendingStartPositionTicks = null; // Target position before first frame
         this._isSeeking = false; // Track seeking state to suppress loading screens during seek
         this._seekFailsafeTimeout = null; // Failsafe timer to clear _isSeeking if seeked event is lost
+        // Last non-zero position from TIME_UPDATE — used when track-switch restarts
+        // must preserve timestamp and getCurrentPositionTicks() briefly reports 0.
+        this._lastKnownPositionTicks = 0;
+        this._resumeEscalationInProgress = false;
 
         // Secondary subtitle stream index (kept here for OSD queries)
         this._currentSecondarySubtitleStreamIndex = -1;
@@ -848,10 +852,66 @@ export class JellyfinPlayer extends EventEmitter {
                     // allow timeupdate to proceed below
                 } else if (Date.now() - (this._resumeWaitStartTime || 0) > 15000) {
                     // Fallback: 15 seconds have passed, seek likely failed or is taking too long.
-                    // Release the spinner so we don't hold the UI hostage forever.
+                    const missedBy = Math.abs(effectiveCurrentTime - targetSec);
                     this._pendingStartPositionTicks = null;
-                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s. Dismissing screen.`);
+                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s (drift ${missedBy.toFixed(1)}s).`);
 
+                    // On webOS / Chromium, track-switch remux often starts at 0 and the
+                    // client seek is silently discarded. Force one more seek, then escalate
+                    // to remux/transcode with StartTimeTicks if still far from target.
+                    if (missedBy > 30 && targetSec >= 5 && !this._resumeEscalationInProgress) {
+                        const targetTicks = Math.round(targetSec * 10000000);
+                        log.warn('Resume fallback: forcing seek after timeout to preserve track-switch position');
+                        try {
+                            this.seek(targetTicks);
+                        } catch (e) {
+                            log.warn('Resume fallback seek threw:', e);
+                        }
+                        // Re-arm a short verification window; if still wrong, escalate.
+                        this._pendingStartPositionTicks = targetTicks;
+                        this._resumeWaitStartTime = Date.now() - 10000; // only ~5s more before escalate
+                        this._resumeEscalationInProgress = true;
+                        setTimeout(() => {
+                            if (!this._resumeEscalationInProgress) return;
+                            const nowTicks = this.getCurrentPositionTicks();
+                            const stillMissed = Math.abs(nowTicks - targetTicks) > 30 * 10000000
+                                && nowTicks < targetTicks - 30 * 10000000;
+                            if (stillMissed && this._currentPlayOptions && !this._isRestarting) {
+                                log.warn('Resume fallback: seek still missed — escalating with StartTimeTicks remux');
+                                const restartOptions = {
+                                    ...this._currentPlayOptions,
+                                    startPositionTicks: targetTicks,
+                                    playbackMode: this._playbackMode === 'transcode' ? 'transcode' : 'remux'
+                                };
+                                this._currentPlayOptions = restartOptions;
+                                this._lastPlayOptions = restartOptions;
+                                this._isRestarting = true;
+                                this.emit(PlayerEvent.RESTARTING);
+                                (async () => {
+                                    try {
+                                        await this.stop();
+                                        await new Promise((r) => setTimeout(r, 400));
+                                        await this.play(restartOptions);
+                                    } catch (err) {
+                                        log.error('Resume escalation restart failed:', err);
+                                    } finally {
+                                        this._isRestarting = false;
+                                        this._resumeEscalationInProgress = false;
+                                    }
+                                })();
+                                return;
+                            }
+                            this._resumeEscalationInProgress = false;
+                            this._pendingStartPositionTicks = null;
+                            this._isPaused = false;
+                            this._subtitleManager?.play();
+                            this.emit(PlayerEvent.PLAY);
+                            this.emit(PlayerEvent.PLAYING);
+                        }, 5000);
+                        return;
+                    }
+
+                    this._resumeEscalationInProgress = false;
                     // Restore active playing state even upon fallback
                     this._isPaused = false;
                     this._subtitleManager?.play();
@@ -907,9 +967,14 @@ export class JellyfinPlayer extends EventEmitter {
             } catch (e) {
                 console.error('Error ticking subtitle manager:', e.message || e, e.stack);
             }
-            
+
+            const absoluteTicks = this.getCurrentPositionTicks();
+            if (absoluteTicks > 0) {
+                this._lastKnownPositionTicks = absoluteTicks;
+            }
+
             // Re-emit normalized timeupdate with absolute ticks for UI/OSD and playback reporting
-            this.emit(PlayerEvent.TIME_UPDATE, this.getCurrentPositionTicks());
+            this.emit(PlayerEvent.TIME_UPDATE, absoluteTicks);
             return;
         }
 
@@ -975,7 +1040,7 @@ export class JellyfinPlayer extends EventEmitter {
                 'Restarting to apply audio index', targetIndex);
 
             if (this._currentPlayOptions && !this._audioRestartInProgress) {
-                const currentTicks = this.getCurrentPositionTicks();
+                const currentTicks = this._captureResumeTicks();
 
                 const restartOptions = {
                     ...this._currentPlayOptions,
@@ -1012,6 +1077,7 @@ export class JellyfinPlayer extends EventEmitter {
                         await new Promise(resolve => setTimeout(resolve, 500));
                         await this.play(restartOptions);
                         this._isRestarting = false;
+                        await this._ensureResumeAfterRestart(currentTicks);
                     } catch (e) {
                         log.error('audiotrackswitchfailed restart failed:', e);
                         this._isRestarting = false;
@@ -1230,6 +1296,8 @@ export class JellyfinPlayer extends EventEmitter {
             // ────────────────────────────────────────────────────────────────
             if (!this._isRestarting) {
                 this._initialPlaybackMode = this._playbackMode;
+                this._lastKnownPositionTicks = options.startPositionTicks || 0;
+                this._resumeEscalationInProgress = false;
             }
 
             // Determine if we need to force a remux for audio tracks on HTML5
@@ -2344,7 +2412,7 @@ export class JellyfinPlayer extends EventEmitter {
         if (requiresRestart && this._currentPlayOptions && !this._audioRestartInProgress) {
             log.info(`Restarting playback for audio track: ${index} (method: ${this._currentPlayMethod ?? 'DirectPlay/HTML5'})`);
 
-            const currentTicks = this.getCurrentPositionTicks();
+            const currentTicks = this._captureResumeTicks();
             
             // Check if the requested index is the original default track
             let isCustomAudioTrack = true;
@@ -2397,6 +2465,7 @@ export class JellyfinPlayer extends EventEmitter {
                 // Reset the restarting flag on success so subsequent stop() calls
                 // emit proper STOP events and clear state normally.
                 this._isRestarting = false;
+                await this._ensureResumeAfterRestart(currentTicks);
             } catch (e) {
                 log.error('Failed to restart playback for audio track switch:', e);
                 this._isRestarting = false;
@@ -2519,7 +2588,7 @@ export class JellyfinPlayer extends EventEmitter {
             log.info(`Burn-in restart (mode: ${burnIn}, track: ${index}) — retranscoding`);
 
             // Capture current position so we can resume from the same spot
-            const currentTicks = this.getCurrentPositionTicks();
+            const currentTicks = this._captureResumeTicks();
 
             // Build new play options with the updated subtitle stream index
             const restartOptions = {
@@ -2545,6 +2614,7 @@ export class JellyfinPlayer extends EventEmitter {
                 await this.play(restartOptions);
                 // Reset on success so subsequent stop() calls behave normally
                 this._isRestarting = false;
+                await this._ensureResumeAfterRestart(currentTicks);
             } finally {
                 // Always clear the guard when done
                 this._burnInRestartInProgress = false;
@@ -2583,7 +2653,7 @@ export class JellyfinPlayer extends EventEmitter {
                 // checked earlier and would have returned by now).
                 log.info(`EMBEDDED_NATIVE + ${this._currentPlayMethod} — restarting transcode for subtitle: ${index}`);
 
-                const currentTicks = this.getCurrentPositionTicks();
+                const currentTicks = this._captureResumeTicks();
                 const restartOptions = {
                     ...this._currentPlayOptions,
                     subtitleStreamIndex: index,
@@ -2602,6 +2672,7 @@ export class JellyfinPlayer extends EventEmitter {
                     await this.play(restartOptions);
                     // Reset on success so subsequent stop() calls behave normally
                     this._isRestarting = false;
+                    await this._ensureResumeAfterRestart(currentTicks);
                 } catch (e) {
                     log.error('Failed to restart for embedded subtitle switch during transcode:', e);
                     this._isRestarting = false;
@@ -3361,6 +3432,66 @@ export class JellyfinPlayer extends EventEmitter {
     // ========================================================================
     // State Getters
     // ========================================================================
+
+    /**
+     * Capture a stable resume position for track-switch restarts.
+     * Prefers live playhead; falls back to the last TIME_UPDATE sample when
+     * the backend briefly reports 0 (common on webOS during OSD / remux).
+     * @returns {number}
+     * @private
+     */
+    _captureResumeTicks() {
+        const live = this.getCurrentPositionTicks() || 0;
+        const known = this._lastKnownPositionTicks || 0;
+        const ticks = Math.max(live, known);
+        if (ticks > 0) {
+            this._lastKnownPositionTicks = ticks;
+        }
+        log.info(`Captured resume ticks for track switch: ${(ticks / 10000000).toFixed(2)}s (live=${(live / 10000000).toFixed(2)}s known=${(known / 10000000).toFixed(2)}s)`);
+        return ticks;
+    }
+
+    /**
+     * After a track-switch remux/transcode restart, verify we landed near the
+     * captured timestamp. webOS 4 often discards the initial resume seek —
+     * force another seek if we are still near 0 while the target is mid-file.
+     *
+     * @param {number} targetTicks
+     * @returns {Promise<void>}
+     * @private
+     */
+    async _ensureResumeAfterRestart(targetTicks) {
+        if (!targetTicks || targetTicks < 5 * 10000000) return;
+
+        const nearEnough = (cur) => {
+            const drift = Math.abs(cur - targetTicks);
+            return drift < 15 * 10000000 || cur >= targetTicks - 15 * 10000000;
+        };
+
+        for (let i = 0; i < 12; i++) {
+            await new Promise((r) => setTimeout(r, 250));
+            if (nearEnough(this.getCurrentPositionTicks())) {
+                log.info(`Track-switch resume verified at ${(this.getCurrentPositionTicks() / 10000000).toFixed(2)}s`);
+                return;
+            }
+        }
+
+        const before = this.getCurrentPositionTicks();
+        log.warn(`Track-switch resume miss (at ${(before / 10000000).toFixed(2)}s, want ${(targetTicks / 10000000).toFixed(2)}s) — forcing seek`);
+        try {
+            this.seek(targetTicks);
+        } catch (e) {
+            log.warn('Track-switch force seek threw:', e);
+        }
+
+        await new Promise((r) => setTimeout(r, 2000));
+        if (nearEnough(this.getCurrentPositionTicks())) {
+            log.info('Track-switch force seek landed');
+            return;
+        }
+
+        log.warn(`Track-switch still off after force seek (at ${(this.getCurrentPositionTicks() / 10000000).toFixed(2)}s)`);
+    }
 
     /**
      * Get current position in ticks
