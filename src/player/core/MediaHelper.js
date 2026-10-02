@@ -211,24 +211,31 @@ export const MediaHelper = {
         }
 
         // =====================================================================
-        // Stream Offset & Start Position Mapping:
-        // In HLS streaming (whether Transcode, DirectStream, or Remux), the server's
-        // master.m3u8 playlist indexes segments across the full media timeline from 0s.
-        // The player backend (Hls.js, WebOS native, or Tizen AVPlay) directly seeks or
-        // starts buffering at playerStartPositionTicks.
+        // Stream Offset & Start Position Mapping (aligned with jellyfin-web):
         //
-        // transcodingOffsetTicks is ONLY non-zero for progressive HTTP streams (!isHls)
-        // where ffmpeg cuts the beginning (-ss) without copying original timestamps.
+        // Progressive Transcode (!isHls, no copytimestamps): ffmpeg -ss cuts the
+        // file and the decoder timeline restarts at 0 → use transcodingOffsetTicks
+        // and playerStartPositionTicks = 0.
+        //
+        // HLS (Transcode / DirectStream / Remux): the playlist covers the full
+        // media timeline from 0s even when PlaybackInfo requested StartTimeTicks
+        // (server may start ffmpeg near that point for efficiency). Do NOT treat
+        // StartTimeTicks in the URL as a clock offset — that makes the OSD show
+        // e.g. 2:00 while the playhead is actually at 0:00 after an audio switch.
+        // The backend must seek to playerStartPositionTicks.
         // =====================================================================
         const isProgressiveTranscode = (playMethod === 'Transcode' || playMethod === 'DirectStream') && !isHls;
+        const copyTimestamps = isProgressiveTranscode && url
+            && String(url).toLowerCase().includes('copytimestamps=true');
+        const useOffsetModel = isProgressiveTranscode && !copyTimestamps;
 
         return {
             url,
             playMethod,
             isHls,
             mediaSource,
-            transcodingOffsetTicks: isProgressiveTranscode ? startPositionTicks : 0,
-            playerStartPositionTicks: isProgressiveTranscode ? 0 : startPositionTicks
+            transcodingOffsetTicks: useOffsetModel ? (startPositionTicks || 0) : 0,
+            playerStartPositionTicks: useOffsetModel ? 0 : startPositionTicks
         };
     },
 
