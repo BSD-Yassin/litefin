@@ -468,18 +468,11 @@ class AuthManager {
                 // Persist the server URL
                 storage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
 
-                // Persist the server name for friendly display in saved servers list
-                if (info && info.ServerName) {
-                    try {
-                        let namesMap = {};
-                        const rawNames = storage.getItem(STORAGE_KEYS.SERVER_NAMES);
-                        if (rawNames) namesMap = JSON.parse(rawNames);
-                        namesMap[serverUrl] = info.ServerName;
-                        storage.setItem(STORAGE_KEYS.SERVER_NAMES, JSON.stringify(namesMap));
-                    } catch (e) {
-                        log.warn('Failed to save server name to map', e);
-                    }
-                }
+                // Always remember this URL in SERVER_NAMES so the login picker can
+                // still list it after sessions expire or Switch Server clears the
+                // active pointer (webOS has no LAN discovery fallback).
+                const fallbackName = serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                this._rememberServerName(serverUrl, (info && info.ServerName) || fallbackName);
 
                 state.set('server:connected', true);
                 state.set('server:offline', false);
@@ -1009,6 +1002,9 @@ class AuthManager {
                 storage.setItem(STORAGE_KEYS.SERVER_SESSIONS, JSON.stringify(sessionMap));
                 log.info(`Wiped ${serverUrl} from saved sessions.`);
             }
+
+            // Also drop the friendly-name entry so Forget is truly destructive
+            this._forgetServerName(serverUrl);
         }
 
         // Now perform the standard disconnect (clears pointers, resets state)
@@ -1085,10 +1081,17 @@ class AuthManager {
     }
 
     /**
-     * Return all servers that have at least one stored session.
-     * Useful for building a server-picker UI in a future iteration.
+     * Return known servers for the login picker.
      *
-     * @returns {Array<{serverUrl: string, sessions: Array}>}
+     * Includes:
+     * - Any URL with at least one stored session in litefin:serverSessions
+     * - Any URL remembered in litefin:serverNames (even with zero sessions)
+     *
+     * The names-only path matters on platforms without LAN discovery (webOS):
+     * Switch Server / expired tokens clear the active pointer, and without a
+     * names fallback the user is forced to retype the URL every time.
+     *
+     * @returns {Array<{serverUrl: string, sessions: Array, serverName: string|null}>}
      */
     getSavedServers() {
         const map = this._loadAllServerSessions();
@@ -1100,13 +1103,20 @@ class AuthManager {
             log.warn('Failed to parse SERVER_NAMES', e);
         }
 
-        return Object.entries(map)
-            .filter(([, sessions]) => Array.isArray(sessions) && sessions.length > 0)
-            .map(([serverUrl, sessions]) => ({
-                serverUrl,
-                sessions,
-                serverName: namesMap[serverUrl] || null
-            }));
+        const urls = new Set([
+            ...Object.keys(map),
+            ...Object.keys(namesMap && typeof namesMap === 'object' ? namesMap : {})
+        ]);
+
+        return Array.from(urls)
+            .map((serverUrl) => {
+                const sessions = Array.isArray(map[serverUrl]) ? map[serverUrl] : [];
+                const serverName = namesMap[serverUrl] || null;
+                // Keep session-bearing servers and remembered names-only entries
+                if (sessions.length === 0 && !serverName) return null;
+                return { serverUrl, sessions, serverName };
+            })
+            .filter(Boolean);
     }
 
     // ========================================================================
@@ -1289,6 +1299,45 @@ class AuthManager {
         const filtered = sessions.filter((s) => s.userId !== userId);
         this._writeSessions(filtered);
         log.debug(`Session removed for user ${userId}. Remaining: ${filtered.length}`);
+    }
+
+    /**
+     * Persist a friendly name for a server URL in litefin:serverNames.
+     * @param {string} serverUrl
+     * @param {string} serverName
+     * @private
+     */
+    _rememberServerName(serverUrl, serverName) {
+        if (!serverUrl || !serverName) return;
+        try {
+            let namesMap = {};
+            const rawNames = storage.getItem(STORAGE_KEYS.SERVER_NAMES);
+            if (rawNames) namesMap = JSON.parse(rawNames);
+            namesMap[serverUrl] = serverName;
+            storage.setItem(STORAGE_KEYS.SERVER_NAMES, JSON.stringify(namesMap));
+        } catch (e) {
+            log.warn('Failed to save server name to map', e);
+        }
+    }
+
+    /**
+     * Drop a server URL from litefin:serverNames (used by Forget Server).
+     * @param {string} serverUrl
+     * @private
+     */
+    _forgetServerName(serverUrl) {
+        if (!serverUrl) return;
+        try {
+            const rawNames = storage.getItem(STORAGE_KEYS.SERVER_NAMES);
+            if (!rawNames) return;
+            const namesMap = JSON.parse(rawNames);
+            if (namesMap && typeof namesMap === 'object' && namesMap[serverUrl]) {
+                delete namesMap[serverUrl];
+                storage.setItem(STORAGE_KEYS.SERVER_NAMES, JSON.stringify(namesMap));
+            }
+        } catch (e) {
+            log.warn('Failed to remove server name from map', e);
+        }
     }
 
     // ========================================================================
