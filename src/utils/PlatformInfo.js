@@ -29,6 +29,24 @@ class PlatformInfo {
         // Cache browser engine version eagerly to support capability detection at module import time
         // Defaults to detected Chromium version from User Agent, or 999 if unknown/modern browser
         this._chromeVersion = this._detectChromeVersion();
+
+        // Eager UA platform sniff so DEFAULTS (PlayerSettings) can branch before App.init()
+        this._platform = this._detectPlatformFromUa();
+    }
+
+    /**
+     * Lightweight UA-only platform sniff (no window.tizen / webapis required).
+     * @private
+     * @returns {'tizen'|'webos'|'web'}
+     */
+    _detectPlatformFromUa() {
+        if (typeof navigator === 'undefined' || !navigator.userAgent) {
+            return 'web';
+        }
+        const ua = navigator.userAgent;
+        if (/Tizen/i.test(ua)) return 'tizen';
+        if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(ua)) return 'webos';
+        return 'web';
     }
 
     /**
@@ -186,6 +204,20 @@ class PlatformInfo {
     /** @returns {boolean} True if running in a standard web browser */
     get isWeb() {
         return this._platform === 'web';
+    }
+
+    /**
+     * True on older TV Chromium (webOS 4.x / Tizen 3–4 era) where blur,
+     * large image decode, and Ambient themes are disproportionately expensive.
+     * Used to seed safer performance defaults without overriding user choices.
+     * @returns {boolean}
+     */
+    get isPerfConstrained() {
+        if (this._platform !== 'webos' && this._platform !== 'tizen') {
+            return false;
+        }
+        // Chrome 57+ (webOS 5+ / Tizen 5+) handles modern UI cost better
+        return this._chromeVersion < 57;
     }
 
     /** @returns {string} The raw platform string ('tizen', 'webos', 'web') */

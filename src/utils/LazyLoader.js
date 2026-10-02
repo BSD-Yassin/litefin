@@ -12,6 +12,7 @@ import { eventBus } from '../core/EventBus.js';
 import BlurHashDecoder from './BlurHashDecoder.js';
 import { storage } from './StorageService.js';
 import { escapeHtml } from './Utils.js';
+import { platformInfo } from './PlatformInfo.js';
 
 const log = logger.create('LazyLoader');
 
@@ -164,7 +165,11 @@ class LazyLoader {
                                     this._loadRow(target);
                                 } else {
                                     this._loadImage(target);
-                                    this._batchPreloadImages(target);
+                                    // Neighbor preload is expensive on Chrome <57 TVs —
+                                    // only warm adjacent cards on modern hardware.
+                                    if (!platformInfo.isPerfConstrained) {
+                                        this._batchPreloadImages(target);
+                                    }
                                 }
                             }
                         } else {
@@ -175,11 +180,9 @@ class LazyLoader {
                     });
                 },
                 {
-                    // Preload ~0.8 screens ahead — enough to have the next row ready
-                    // before it scrolls into view, without triggering a burst of 60+
-                    // simultaneous decode requests on page load.
-                    // VirtualCardRow handles home-screen card preloading internally via forceLoad()
-                    rootMargin: `${Math.ceil(window.innerHeight * 0.8)}px`,
+                    // Preload ahead of the viewport. Constrained TVs use a smaller
+                    // margin to avoid decode storms when Home first paints.
+                    rootMargin: `${Math.ceil(window.innerHeight * (platformInfo.isPerfConstrained ? 0.25 : 0.8))}px`,
                     threshold: 0.01
                 }
             );

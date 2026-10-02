@@ -85,7 +85,9 @@ const DEFAULTS = {
     // 'auto'    — trust the hardware probe (default; may be wrong on some TVs)
     // 'enable'  — force EAC3 into the profile regardless of what the probe says
     // 'disable' — explicitly exclude EAC3 even if the probe says it is supported
-    enableEac3: 'auto',
+    // webOS Chromium often reports EAC3 as unsupported while passthrough works;
+    // defaulting to enable avoids needless remux/transcode on constrained TVs.
+    enableEac3: platformInfo.isWebOS ? 'enable' : 'auto',
     enableMp2: 'auto',
 
     // -------------------------------------------------------------------------
@@ -209,10 +211,10 @@ const DEFAULTS = {
     subtitleAssLoadContainerFonts: true,
 
     // Drop all ASS animations (karaoke, \t, \move, fade, etc.) for performance
-    subtitleAssDropAnimations: false,
+    subtitleAssDropAnimations: platformInfo.isPerfConstrained,
 
     // Scale down the subtitle canvas to improve performance (1.0 = full res)
-    subtitleAssPrescaleFactor: 0.8,
+    subtitleAssPrescaleFactor: platformInfo.isPerfConstrained ? 0.55 : 0.8,
 
     // Global font scale multiplier for ASS subtitles
     subtitleFontScale: 1.0,
@@ -753,7 +755,8 @@ export const PlayerSettings = {
             key === 'enableDolbyVision' ||
             key === 'enableDts' ||
             key === 'enableTrueHd' ||
-            key === 'enableMp2'
+            key === 'enableMp2' ||
+            key === 'enableEac3'
         ) {
             if (stored === 'true') return 'enable';
             if (stored === 'false') return 'disable';

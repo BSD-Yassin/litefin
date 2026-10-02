@@ -177,9 +177,36 @@ class LayoutManager {
     }
 
     /**
+     * On webOS 4.x / Tizen 3–4 (Chrome <57), opt into known-cheap UI defaults
+     * when the user has never set the preference. Explicit stored values win.
+     * @private
+     */
+    _seedPerfConstrainedDefaults() {
+        if (!platformInfo.isPerfConstrained) return;
+
+        const seeds = [
+            ['litefin:lowVramMode', 'true'],
+            ['litefin:disableCardScaling', 'true'],
+            ['litefin:disableBlurhash', 'true'],
+            ['pref:imageQuality', 'low'],
+            ['pref:homeRowsLimit', '8']
+        ];
+
+        for (const [key, value] of seeds) {
+            if (storage.getItem(key) === null) {
+                storage.setItem(key, value);
+                log.info(`Perf default seeded: ${key}=${value}`);
+            }
+        }
+    }
+
+    /**
      * Initialize layout manager
      */
     init() {
+        // Seed safer defaults on old TV Chromium before reading prefs (never overwrite user choices)
+        this._seedPerfConstrainedDefaults();
+
         // Load saved preferences
         let savedMediaRowsLayout = storage.getItem('pref:mediaRowsLayout');
         if (!savedMediaRowsLayout) {
@@ -221,6 +248,12 @@ class LayoutManager {
 
         if (savedThemeMode && Object.values(THEME_MODES).includes(savedThemeMode)) {
             initialMode = savedThemeMode;
+        }
+
+        // Ambient glow is disproportionately expensive on Chrome <57 TV GPUs
+        if (platformInfo.isPerfConstrained && initialMode === THEME_MODES.AMBIENT) {
+            log.info('Remapping Ambient theme → Black on perf-constrained TV');
+            initialMode = THEME_MODES.BLACK;
         }
 
         log.info(`Loading theme: savedMode="${savedThemeMode}" -> initialMode="${initialMode}"`);
@@ -518,6 +551,11 @@ class LayoutManager {
         if (!Object.values(THEME_MODES).includes(mode)) {
             log.warn(`Invalid theme mode "${mode}"`);
             return;
+        }
+
+        if (platformInfo.isPerfConstrained && mode === THEME_MODES.AMBIENT) {
+            log.info('Ambient theme blocked on perf-constrained TV — using Black');
+            mode = THEME_MODES.BLACK;
         }
 
         const oldMode = this._themeMode;

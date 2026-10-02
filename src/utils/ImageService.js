@@ -15,7 +15,13 @@ class ImageService {
      * @returns {string} low | medium | high | very-high | ultra | original
      */
     getPreset() {
-        return storage.getItem('pref:imageQuality') || 'medium';
+        const stored = storage.getItem('pref:imageQuality');
+        if (stored) return stored;
+        // Constrained TVs default to low image decode cost until the user opts up
+        if (typeof document !== 'undefined' && document.documentElement?.getAttribute('data-low-vram') === 'true') {
+            return 'low';
+        }
+        return 'medium';
     }
 
     /**
@@ -46,8 +52,18 @@ class ImageService {
             ultra: 2.0
         };
 
-        // Return mapped value or fallback to standard medium scale (1.0)
-        return scaleMap[preset] !== undefined ? scaleMap[preset] : 1.0;
+        let scale = scaleMap[preset] !== undefined ? scaleMap[preset] : 1.0;
+
+        // Extra clamp under Low VRAM — posters stay readable, decode cost drops
+        if (
+            typeof document !== 'undefined' &&
+            document.documentElement?.getAttribute('data-low-vram') === 'true' &&
+            scale > 0.75
+        ) {
+            scale = 0.75;
+        }
+
+        return scale;
     }
 
     /**
