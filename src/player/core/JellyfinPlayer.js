@@ -557,6 +557,7 @@ export class JellyfinPlayer extends EventEmitter {
         // must preserve timestamp and getCurrentPositionTicks() briefly reports 0.
         this._lastKnownPositionTicks = 0;
         this._resumeEscalationInProgress = false;
+        this._resumeEarlySeekAttempted = false;
 
         // Secondary subtitle stream index (kept here for OSD queries)
         this._currentSecondarySubtitleStreamIndex = -1;
@@ -816,6 +817,7 @@ export class JellyfinPlayer extends EventEmitter {
                  // so the UI loading spinner stays up until the seek completes
                  this._pendingStartPositionTicks = target;
                  this._resumeWaitStartTime = Date.now();
+                 this._resumeEarlySeekAttempted = false;
                  return;
             }
             
@@ -834,12 +836,18 @@ export class JellyfinPlayer extends EventEmitter {
             const targetSec = this._pendingStartPositionTicks / 10000000;
             // Account for any active transcoding offset so transcoded segments calculate target position accurately
             const offsetSec = (this._transcodingOffsetTicks || 0) / 10000000;
-            const effectiveCurrentTime = (event.data?.time || 0) + offsetSec;
+            // Prefer raw backend time from the event — do not trust getCurrentPositionTicks()
+            // here: while pending, it lies and returns the target, which falsely "verifies"
+            // resume after language switches (OSD stuck at 2:00 while video is at 0:00).
+            const backendSec = event.data?.time || 0;
+            const effectiveCurrentTime = backendSec + offsetSec;
+            const waitMs = Date.now() - (this._resumeWaitStartTime || 0);
 
-            if (event.type === PlayerEvent.TIME_UPDATE && (event.data?.time || 0) > 0) {
+            if (event.type === PlayerEvent.TIME_UPDATE && backendSec > 0.05) {
                 // Check if we have arrived near our target resume position (within 15s GOP keyframe tolerance)
                 if (Math.abs(effectiveCurrentTime - targetSec) < 15 || effectiveCurrentTime >= (targetSec - 15)) {
                     this._pendingStartPositionTicks = null;
+                    this._resumeEscalationInProgress = false;
                     log.info(`Resume verified at ${effectiveCurrentTime}s. Dismissing loading screen.`);
 
                     // Synchronize logical paused state — playback has safely engaged at the target position
@@ -850,80 +858,77 @@ export class JellyfinPlayer extends EventEmitter {
                     this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                     // allow timeupdate to proceed below
-                } else if (Date.now() - (this._resumeWaitStartTime || 0) > 15000) {
-                    // Fallback: 15 seconds have passed, seek likely failed or is taking too long.
+                } else if (
+                    // Playing from the wrong place (e.g. 0:00 after audio switch while target is 2:00).
+                    // Force-seek early — do not wait 15s with a frozen OSD stuck on the old timestamp.
+                    targetSec >= 5
+                    && effectiveCurrentTime < targetSec - 20
+                    && waitMs > 2500
+                    && !this._resumeEarlySeekAttempted
+                ) {
+                    this._resumeEarlySeekAttempted = true;
+                    const targetTicks = this._pendingStartPositionTicks;
+                    log.warn(
+                        `Resume early miss: backend at ${effectiveCurrentTime.toFixed(2)}s, want ${targetSec.toFixed(2)}s — forcing seek`
+                    );
+                    try {
+                        this.seek(targetTicks);
+                    } catch (e) {
+                        log.warn('Resume early seek threw:', e);
+                    }
+                    return;
+                } else if (waitMs > 12000) {
+                    // Fallback: still far from target after early seek window.
                     const missedBy = Math.abs(effectiveCurrentTime - targetSec);
-                    this._pendingStartPositionTicks = null;
-                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s (drift ${missedBy.toFixed(1)}s).`);
+                    log.warn(
+                        `Resume fallback: timeout. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s (drift ${missedBy.toFixed(1)}s).`
+                    );
 
-                    // On webOS / Chromium, track-switch remux often starts at 0 and the
-                    // client seek is silently discarded. Force one more seek, then escalate
-                    // to remux/transcode with StartTimeTicks if still far from target.
-                    if (missedBy > 30 && targetSec >= 5 && !this._resumeEscalationInProgress) {
-                        const targetTicks = Math.round(targetSec * 10000000);
-                        log.warn('Resume fallback: forcing seek after timeout to preserve track-switch position');
-                        try {
-                            this.seek(targetTicks);
-                        } catch (e) {
-                            log.warn('Resume fallback seek threw:', e);
-                        }
-                        // Re-arm a short verification window; if still wrong, escalate.
-                        this._pendingStartPositionTicks = targetTicks;
-                        this._resumeWaitStartTime = Date.now() - 10000; // only ~5s more before escalate
+                    if (missedBy > 20 && targetSec >= 5 && !this._resumeEscalationInProgress) {
+                        const targetTicks = this._pendingStartPositionTicks;
                         this._resumeEscalationInProgress = true;
-                        setTimeout(() => {
-                            if (!this._resumeEscalationInProgress) return;
-                            const nowTicks = this.getCurrentPositionTicks();
-                            const stillMissed = Math.abs(nowTicks - targetTicks) > 30 * 10000000
-                                && nowTicks < targetTicks - 30 * 10000000;
-                            if (stillMissed && this._currentPlayOptions && !this._isRestarting) {
-                                log.warn('Resume fallback: seek still missed — escalating with StartTimeTicks remux');
-                                const restartOptions = {
-                                    ...this._currentPlayOptions,
-                                    startPositionTicks: targetTicks,
-                                    playbackMode: this._playbackMode === 'transcode' ? 'transcode' : 'remux'
-                                };
-                                this._currentPlayOptions = restartOptions;
-                                this._lastPlayOptions = restartOptions;
-                                this._isRestarting = true;
-                                this.emit(PlayerEvent.RESTARTING);
-                                (async () => {
-                                    try {
-                                        await this.stop();
-                                        await new Promise((r) => setTimeout(r, 400));
-                                        await this.play(restartOptions);
-                                    } catch (err) {
-                                        log.error('Resume escalation restart failed:', err);
-                                    } finally {
-                                        this._isRestarting = false;
-                                        this._resumeEscalationInProgress = false;
-                                    }
-                                })();
-                                return;
+                        this._pendingStartPositionTicks = null;
+                        log.warn('Resume fallback: escalating remux with StartTimeTicks (do not keep fake OSD time)');
+                        const restartOptions = {
+                            ...this._currentPlayOptions,
+                            startPositionTicks: targetTicks,
+                            playbackMode: this._playbackMode === 'transcode' ? 'transcode' : 'remux'
+                        };
+                        this._currentPlayOptions = restartOptions;
+                        this._lastPlayOptions = restartOptions;
+                        this._isRestarting = true;
+                        this.emit(PlayerEvent.RESTARTING);
+                        (async () => {
+                            try {
+                                await this.stop();
+                                await new Promise((r) => setTimeout(r, 400));
+                                await this.play(restartOptions);
+                                await this._ensureResumeAfterRestart(targetTicks);
+                            } catch (err) {
+                                log.error('Resume escalation restart failed:', err);
+                            } finally {
+                                this._isRestarting = false;
+                                this._resumeEscalationInProgress = false;
                             }
-                            this._resumeEscalationInProgress = false;
-                            this._pendingStartPositionTicks = null;
-                            this._isPaused = false;
-                            this._subtitleManager?.play();
-                            this.emit(PlayerEvent.PLAY);
-                            this.emit(PlayerEvent.PLAYING);
-                        }, 5000);
+                        })();
                         return;
                     }
 
+                    // Give up: clear the fake pending time so OSD matches real playhead
+                    this._pendingStartPositionTicks = null;
                     this._resumeEscalationInProgress = false;
-                    // Restore active playing state even upon fallback
                     this._isPaused = false;
                     this._subtitleManager?.play();
-
                     this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                 } else {
-                    // Still waiting to reach target time. Suppress early timeupdates.
+                    // Still waiting to reach target time. Suppress early timeupdates
+                    // so the OSD does not flash 0:00 — but only while we still believe
+                    // a seek is in flight (first ~2.5s or after early seek).
                     return;
                 }
-            } else if (event.type === PlayerEvent.PLAY || 
-                       event.type === PlayerEvent.PLAYING || 
+            } else if (event.type === PlayerEvent.PLAY ||
+                       event.type === PlayerEvent.PLAYING ||
                        event.type === PlayerEvent.TIME_UPDATE) {
                 // Suppress events while the buffer is jumping
                 return;
@@ -1894,9 +1899,10 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Save the intended start position for the UI before the backend initializes.
             this._pendingStartPositionTicks = originalStartPositionTicks > 0 ? originalStartPositionTicks : null;
+            this._resumeEarlySeekAttempted = false;
 
             if (this._pendingStartPositionTicks) {
-                // For native client-side seeking, start the 15-second wall-clock timeout immediately
+                // For native client-side seeking, start the wall-clock timeout immediately
                 this._resumeWaitStartTime = Date.now();
             }
 
@@ -3453,8 +3459,8 @@ export class JellyfinPlayer extends EventEmitter {
 
     /**
      * After a track-switch remux/transcode restart, verify we landed near the
-     * captured timestamp. webOS 4 often discards the initial resume seek —
-     * force another seek if we are still near 0 while the target is mid-file.
+     * captured timestamp using the RAW backend clock (not getCurrentPositionTicks,
+     * which can report the pending target while the decoder is still at 0).
      *
      * @param {number} targetTicks
      * @returns {Promise<void>}
@@ -3463,34 +3469,47 @@ export class JellyfinPlayer extends EventEmitter {
     async _ensureResumeAfterRestart(targetTicks) {
         if (!targetTicks || targetTicks < 5 * 10000000) return;
 
+        const rawTicks = () => {
+            const backendTime = this._backend?.getCurrentTime ? this._backend.getCurrentTime() : 0;
+            return Math.round((backendTime || 0) * 10000000) + (this._transcodingOffsetTicks || 0);
+        };
+
         const nearEnough = (cur) => {
             const drift = Math.abs(cur - targetTicks);
             return drift < 15 * 10000000 || cur >= targetTicks - 15 * 10000000;
         };
 
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 16; i++) {
             await new Promise((r) => setTimeout(r, 250));
-            if (nearEnough(this.getCurrentPositionTicks())) {
-                log.info(`Track-switch resume verified at ${(this.getCurrentPositionTicks() / 10000000).toFixed(2)}s`);
+            const cur = rawTicks();
+            if (nearEnough(cur)) {
+                this._pendingStartPositionTicks = null;
+                log.info(`Track-switch resume verified at ${(cur / 10000000).toFixed(2)}s`);
                 return;
+            }
+            // Early force-seek once we see the decoder running from the wrong place
+            if (i === 6 && cur < targetTicks - 20 * 10000000) {
+                log.warn(
+                    `Track-switch resume miss early (at ${(cur / 10000000).toFixed(2)}s, want ${(targetTicks / 10000000).toFixed(2)}s) — forcing seek`
+                );
+                try {
+                    this.seek(targetTicks);
+                } catch (e) {
+                    log.warn('Track-switch force seek threw:', e);
+                }
             }
         }
 
-        const before = this.getCurrentPositionTicks();
-        log.warn(`Track-switch resume miss (at ${(before / 10000000).toFixed(2)}s, want ${(targetTicks / 10000000).toFixed(2)}s) — forcing seek`);
-        try {
-            this.seek(targetTicks);
-        } catch (e) {
-            log.warn('Track-switch force seek threw:', e);
-        }
-
-        await new Promise((r) => setTimeout(r, 2000));
-        if (nearEnough(this.getCurrentPositionTicks())) {
-            log.info('Track-switch force seek landed');
+        const before = rawTicks();
+        if (nearEnough(before)) {
+            this._pendingStartPositionTicks = null;
             return;
         }
 
-        log.warn(`Track-switch still off after force seek (at ${(this.getCurrentPositionTicks() / 10000000).toFixed(2)}s)`);
+        log.warn(`Track-switch still off after force seek (at ${(before / 10000000).toFixed(2)}s)`);
+        // Stop lying to the OSD about the target time — report the real playhead
+        this._pendingStartPositionTicks = null;
+        this._lastKnownPositionTicks = before;
     }
 
     /**
@@ -3504,11 +3523,16 @@ export class JellyfinPlayer extends EventEmitter {
 
         const backendTime = this._backend?.getCurrentTime ? this._backend.getCurrentTime() : 0;
         const backendTicks = Math.round(backendTime * 10000000);
-        
-        // If playback hasn't fully started yet (time is 0), but we requested a specific
-        // start position, return it so the UI (OSD) shows the correct time immediately
-        // instead of flashing 00:00.
-        if (backendTicks === 0 && this._pendingStartPositionTicks) {
+
+        // Only fake the pending resume time for a short spinner window BEFORE the
+        // decoder reports real progress. Once backend time advances, always trust
+        // it — otherwise language switches leave the OSD at e.g. 2:00 while the
+        // stream is actually playing the opening from 0:00.
+        if (
+            backendTicks === 0
+            && this._pendingStartPositionTicks
+            && (Date.now() - (this._resumeWaitStartTime || 0)) < 3000
+        ) {
             return this._pendingStartPositionTicks;
         }
 
